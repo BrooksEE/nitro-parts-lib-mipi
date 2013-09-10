@@ -28,7 +28,7 @@ module mipi_phy_ser
         clk_ser,
         8,
         1,
-        1
+        0
     );
 
     parameter ST_STOP = 0, ST_HS_RQST=1, ST_HS_PRPR=2, ST_SOT=3, ST_HST=4, ST_EOT=5, ST_WAIT=6;

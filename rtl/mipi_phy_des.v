@@ -50,7 +50,7 @@ module mipi_phy_des (
 
      parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
 
-     reg [7:0] q;
+     wire [7:0] q;
      serdes serdes0
        (.clk_serdes0(clk_in_int_buf),
         .clk_serdes1(clk_in_int_inv),
@@ -64,15 +64,13 @@ module mipi_phy_des (
      // find word alignment by finding row sync pattern
      reg [7:0]  q0, q1;
      reg [7:0]  q_shift[0:7];
-     genvar j;
-     generate
+     integer i;
      always @(q0, q1) begin
         q_shift[0] = q0;
-        for (j=1; j<8; j=j+1) begin
-          q_shift[j] = q_shifter(q0, q1, j);
+        for (i=1; i<8; i=i+1) begin
+          q_shift[i] = q_shifter(q0, q1, i);
         end
      end
-     endgenerate
 
      always @(posedge clk or negedge resetb) begin
        if (!resetb) begin
@@ -87,14 +85,12 @@ module mipi_phy_des (
      reg [1:0] state;
      reg [2:0] sync_pos;
      reg [7:0] data_i;
-     integer i;
 
-     //always @(*) begin
+     genvar j;
      generate
-        for (j=0;j<8;j=j+1)
-           assign data[j] = data_i[8-j-1];
+       for (j=0;j<8;j=j+1)
+       assign data[j] = data_i[8-j-1];
      endgenerate
-     //end
 
      always @(posedge clk or negedge resetb) begin
         if (!resetb) begin
