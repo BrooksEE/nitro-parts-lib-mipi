@@ -14,7 +14,8 @@ module mipi_csi2_des
    output        img_clk,
    output reg [DATA_WIDTH-1:0] dato,
    output reg 	     lvo,
-   output reg 	     fvo
+   output reg 	     fvo,
+   input         md_polarity
    );
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
@@ -33,7 +34,8 @@ module mipi_csi2_des
       .mdn_lp       (mdn_lp),
       .clk          (phy_clk),
       .we           (phy_we),
-      .data         (phy_data)
+      .data         (phy_data),
+      .md_polarity  (md_polarity)
    );
 
    // TODO generate img_clk instead

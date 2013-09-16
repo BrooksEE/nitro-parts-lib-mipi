@@ -9,7 +9,8 @@ module mipi_phy_des (
      input            mdn_lp,
      output           clk,
      output reg       we,
-     output [7:0] data
+     output [7:0] data,
+     input            md_polarity
 );
 
 
@@ -66,9 +67,9 @@ module mipi_phy_des (
      reg [7:0]  q_shift[0:7];
      integer i;
      always @(q0, q1) begin
-        q_shift[0] = q0;
+        q_shift[0] = q0 ^ {8{md_polarity}};
         for (i=1; i<8; i=i+1) begin
-          q_shift[i] = q_shifter(q0, q1, i);
+          q_shift[i] = q_shifter(q0, q1, i) ^ {8{md_polarity}};
         end
      end
 
@@ -109,7 +110,7 @@ module mipi_phy_des (
                     state <= ST_START;
                 end else begin
                     for (i=0;i<8;i=i+1) begin
-                        if (q_shift[i] == 8'hb8) begin // start code is h1d b8 is the backward versions
+                        if (q_shift[i] == 8'h1d) begin // start code is hb8 1d is the backward versions
                             /* verilator lint_off WIDTH */
                             sync_pos <= i;
                             /* verilator lint_on WIDTH */

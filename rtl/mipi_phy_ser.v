@@ -83,7 +83,7 @@ module mipi_phy_ser
               end
            end else if (state <= ST_SOT) begin
               state <= ST_HST;
-              data_sync <= 8'h1d; // start code
+              data_sync <= 8'hb8; // start code
            end else if (state == ST_HST) begin
               if (!hs_req) begin
                 data_sync <= {8{!data_sync[7]}};  // toggle data lines one more time but then they don't change
