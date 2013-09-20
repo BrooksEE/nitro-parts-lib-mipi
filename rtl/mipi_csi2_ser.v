@@ -30,17 +30,15 @@ module mipi_csi2_ser
    // generate a high speed clock w/ pll
    // for reading image data and creating
    // converting to 8 bit data
-   /* wire clk_hs;
+    wire clk_hs;
    PLL_sim pll_hs (
       pixclk,
       clk_hs,
       {28'b0,pixel_width}, //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits 
       8,
-      1
-   ); */
-   // TODO fix pll 
-   // for now since 8 bit data just assign
-   wire clk_hs = pixclk;
+      0
+   ); 
+   //wire clk_hs = pixclk;
 
    // generate low speed clock with clock divider.
    // divider should be set so that lp mode on
@@ -89,7 +87,7 @@ module mipi_csi2_ser
 
 
    // packet states
-   parameter ST_FRAME_START=0, ST_FRAME_END=1, ST_LINE_START=2, ST_LINE_END=3, ST_IDLE=4;
+   localparam ST_FRAME_START=0, ST_FRAME_END=1, ST_LINE_START=2, ST_LINE_END=3, ST_IDLE=4;
    // note 0-3 are the data types for the short packet data ids.
 
    reg [2:0] state;
@@ -135,7 +133,7 @@ module mipi_csi2_ser
    end
 
 
-   parameter ST_HS_SOT=1, ST_HS_DATA=2, ST_HS_EOT=3;
+   localparam ST_HS_SOT=1, ST_HS_DATA=2, ST_HS_EOT=3;
    reg [2:0] state_s;
    reg [2:0] state_saved;
    reg [2:0] substate; 
@@ -154,8 +152,7 @@ module mipi_csi2_ser
    reg image_empty_s;
    wire [15:0] frame_cnt_next = frame_cnt + 1;
    reg [7:0] lsbs;
-   reg send_lsbs;
-   reg [1:0] packing;
+   reg [2:0] packing; // count 0-4 and then the 4th byte send the lsbs
 
    wire [2:0] state_check = state_s != ST_IDLE ? state_s :
                             state_saved != ST_IDLE ? state_saved :
@@ -179,7 +176,6 @@ module mipi_csi2_ser
           data_id <= 0;
           image_empty_s <= 0;
           lsbs <= 0;
-          send_lsbs <= 0;
           packing <= 0;
           image_flush <= 0;
        end else begin
@@ -194,14 +190,20 @@ module mipi_csi2_ser
                 substate <= ST_HS_SOT;
                 long_packet <= state_check == ST_LINE_START;
                 if (state_check == ST_LINE_START) begin
-                    data_id <= {2'b0, pixel_width == 8 ? 6'h2a : 6'h2b};  // TODO error check other pixel widths.
+                    data_id <= {2'b0, pixel_width == 8 ? 6'h2a : 6'h2b};
                 end else begin
                     data_id <= {5'b0, state_check};
                 end
                 hs_req <= 1;
                 if (state_check == ST_LINE_START) begin
                     if (pixel_width ==10) begin
-                        header_wc <= image_wc_last * 5 / 4;
+                        if (image_wc_last == 0) begin
+                            ser_wc <= num_cols * 5/4;
+                            header_wc <= num_cols * 5/4;
+                        end else begin
+                            ser_wc <= image_wc_last * 5/4;
+                            header_wc <= image_wc_last * 5 / 4;
+                        end
                     end else if (pixel_width ==8) begin
                         if (image_wc_last == 0) begin
                             ser_wc <= num_cols;
@@ -218,6 +220,7 @@ module mipi_csi2_ser
             end else begin
                 // size changes can cause fifo to not be emptied always
                 image_flush <= !image_empty; // ignore data
+                image_re <= 0;
             end
             
           end else if (substate == ST_HS_SOT) begin
@@ -232,12 +235,19 @@ module mipi_csi2_ser
             // but hacking for now
             if (state_s != ST_IDLE) begin
                 state_saved <= state_s;
+                if (state_s == ST_FRAME_START) begin
+                    // not keeping up with the last frame?
+                    // just bail
+                    substate <= ST_IDLE;
+                end
             end
             if (image_wc_cnt < 2) begin
                 image_wc_cnt <= image_wc_cnt + 1;
                 data_ser <= header_wc[7:0];
                 header_wc <= header_wc >> 8;
                 ecc_cnt <= 0;
+                packing <= 0;
+                lsbs <= 0;
             end else begin
                 if (!ecc_cnt) begin
                    ecc_cnt <= 1;
@@ -249,69 +259,47 @@ module mipi_csi2_ser
                       substate <= ST_IDLE; // no eot on short packets
                    end
                 end else begin
-                   // transmit the packet
-                   //if (!image_empty || !image_empty_s) begin
-                   // TODO this is tmp for 8 bit data
-                   // fix this entire thing when selecting between
-                   //
-                   //
-                   if (image_re) begin
-                      data_ser <= datar[7:0];
-                      ser_wc <= ser_wc - 1;
-                      if (ser_wc == 0) begin
-                        image_re <= 0; 
-                      end
+
+                   if (pixel_width == 8) begin
+                    if (image_re) begin
+                       data_ser <= datar[7:0];
+                       ser_wc <= ser_wc - 1;
+                       if (ser_wc == 0) begin
+                         image_re <= 0; 
+                       end
+                    end else begin
+                       substate <= ST_HS_EOT;
+                       data_ser <= checksum[7:0];
+                    end
+                   end else if (pixel_width == 10) begin
+                     if (packing == 4) begin
+                        // multiple of 4 bytes
+                        data_ser <= lsbs;
+                        ser_wc <= ser_wc - 1;
+                        lsbs <= 0; 
+                        packing <= 0;
+                        if (ser_wc > 0) begin
+                            image_re <= 1;
+                        end 
+                     end else begin
+                        if (image_re) begin
+                           lsbs <= lsbs | {6'b0,datar[1:0]} << packing*2;
+                           packing <= packing + 1;
+                           ser_wc <= ser_wc -1;
+                           data_ser <= datar[9:2];
+                           if (packing == 3 || ser_wc == 0) begin
+                             image_re <= 0; // don't read a byte this time next time send lsbs
+                           end
+                        end else begin
+                            substate <= ST_HS_EOT;
+                            data_ser <= checksum[7:0];
+                        end
+
+                     end
                    end else begin
-                      substate <= ST_HS_EOT;
-                      data_ser <= checksum[7:0];
+                     assert(0); // error case 
                    end
                    
-
-                   //if (image_re) begin 
-                   // if (pixel_width ==10) begin
-                   //   data_ser <= datar[DATA_WIDTH-1:DATA_WIDTH-8]; 
-                   //   packing <= packing + 1;
-                   //   lsbs <= lsbs | ({6'b0, datar[1:0]} << packing * 2); 
-                   //   if (packing == 3) begin
-                   //     image_re <= 0;
-                   //     send_lsbs <= 1;
-                   //   end
-                   // end else if (pixel_width ==8) begin
-                   //   data_ser <= datar[7:0]; 
-                   //   //if (image_empty) begin
-                   //   // image_re <= 0;
-                   //   //end
-                   // end 
-                   //end else begin
-                    //if (!image_empty && send_lsbs) begin
-                    // //image_re <= 1;
-                    // packing <= 0;
-                    // data_ser <= lsbs;
-                    // lsbs <= 0;
-                    // send_lsbs <= 0;
-                    //end else begin
-                    // //image_re <= 0; 
-                    // substate <= ST_HS_EOT;
-                    // data_ser <= checksum[7:0];
-                    //end
-                    //end
-
-                   //if (image_re) begin
-                   //   image_re <= 0;
-                   //   data_ser <= datar[7:0];
-                   //   data_ser_next <= { {16-DATA_WIDTH{1'b0}}, datar[DATA_WIDTH-1:8] };
-                   //   has_next <= 1;
-                   //end else if (has_next) begin
-                   //   data_ser <= data_ser_next;     
-                   //   has_next <= 0;
-
-                   //   if (!image_empty) begin
-                   //      image_re <= 1; 
-                   //   end
-                   //end else begin // TODO error cases?
-                   //   substate <= ST_HS_EOT;
-                   //   data_ser <= checksum[7:0];
-                   //end
                 end
             end
           end else if (substate == ST_HS_EOT) begin

@@ -42,8 +42,8 @@ module mipi_phy_ser
     always @(posedge clk_hs or negedge resetb) begin
         if (!resetb) begin
            state <= ST_STOP; 
-           mdp_lp <= 0;
-           mdn_lp <= 0;
+           mdp_lp <= 1;
+           mdn_lp <= 1;
            lp_cnt_s <= 0;
            data_sync <= 0;
            timeout <= 0;

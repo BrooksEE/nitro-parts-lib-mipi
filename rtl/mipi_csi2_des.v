@@ -13,8 +13,10 @@ module mipi_csi2_des
 
    output        img_clk,
    output reg [DATA_WIDTH-1:0] dato,
+   output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
+   output  [31:0]  sync_count,
    input         md_polarity
    );
 
@@ -38,28 +40,34 @@ module mipi_csi2_des
       .md_polarity  (md_polarity)
    );
 
-   // TODO generate img_clk instead
-   // so we can have it run slower
-   // and clock out 10 bit data.
-   // where to put the BUFG for img_clk
    assign img_clk = phy_clk;
 
-   parameter ST_IDLE=0, ST_HEADER=1, ST_DATA=2, ST_EOT=3; 
+   parameter ST_IDLE=0, ST_HEADER=1, ST_DATA8=2, ST_DATA10=3, ST_EOT=4; 
    parameter ID_FRAME_START=0, ID_FRAME_END=1, ID_LINE_START=2, ID_LINE_END=3;
-   reg [1:0] state;
+   reg [2:0] state;
 
    reg [1:0] header_cnt; // read the header
    reg [7:0] header[0:3];
    reg [15:0] wc;
-   reg dat_pos;
+   reg [DATA_WIDTH-1:0] data10[0:3]; 
+   reg [2:0] data10pos;
+   reg data10start;
+   integer i;
+   wire [1:0] lsbs[0:3];
+   genvar j;
+   generate
+     for (j=0;j<4;j=j+1) 
+         assign lsbs[j] = phy_data[j*2+1:j*2];
+   endgenerate
    always @(posedge phy_clk) begin
       if (!resetb) begin
           lvo <= 0;
           fvo <= 0;
           dato <= 0;
           header_cnt <= 0;
-          //img_clk <= 0;
-          dat_pos <= 0;
+          data10pos <= 0;
+          dvo <= 0;
+          data10start <= 0;
       end else begin
 
           //img_clk <= !img_clk;
@@ -86,35 +94,69 @@ module mipi_csi2_des
                    state <= ST_EOT;
                 end else if (header[0][5:0] == 6'h2a) begin
                    wc <= { header[2], header[1] };
-                   state <= ST_DATA;
-                   //dat_pos <= 1;
+                   state <= ST_DATA8;
+                end else if (header[0][5:0] == 6'h2b) begin
+                   wc <= { header[2], header[1] };
+                   state <= ST_DATA10;
+                   data10pos <= 0;
+                   data10start <= 1;
+                   dvo <= 0;
                 end else begin
                    state <= ST_EOT; // ignore all other headers right now
                 end
 
              end
-          end else if (state == ST_DATA) begin
-             //dat_pos <= !dat_pos;
+          end else if (state == ST_DATA8) begin
 
              if (wc > 0 && phy_we) begin
                 lvo <= 1;
-                if (DATA_WIDTH==10) begin 
-                 // TODO
-                end else if (DATA_WIDTH==8)
-                begin
-                   dato[7:0] <= phy_data;
-                   wc <= wc - 1;
-                end
-                //if (dat_pos == 0) begin
-                //   dato[9:8] <= phy_data[DATA_WIDTH-9:0];
-                //end else begin
-                //   dato[7:0] <= phy_data;
-                //   wc <= wc - 1;
-                //end
+                dvo <= 1;
+                dato[7:0] <= phy_data;
+                wc <= wc - 1;
              end else begin
                 state <= ST_EOT;
                 lvo <= 0;
                 // TODO a frame will also have two bytes for the checksum
+             end
+          end else if (state == ST_DATA10) begin
+             if (wc > 0 && phy_we) begin
+                lvo <= 1;
+                if (wc>0) wc <= wc - 1;
+                // data not valid until we've collected the 5th byte with the
+                // lsbs
+                if (data10pos < 4) begin
+                    data10[data10pos[1:0]][9:0] <= {phy_data,2'b0};
+                end
+                if (data10pos == 4) begin
+                    data10pos <= 0;
+                end else begin
+                    data10pos <= data10pos + 1;
+                end
+
+                if ((data10start && data10pos==4) || !data10start) begin
+                    data10start <= 0;
+                    if (data10pos==4) begin
+                        // lsbs
+                        dvo <= 0;
+                        for ( i=0;i<4;i=i+1) begin
+                            data10[i] <= data10[i] | {8'b0, lsbs[i]};
+                        end
+                    end else begin
+                        dvo <= 1;
+                        dato[9:0] <= data10[data10pos[1:0]];
+                    end
+                end
+
+             end else begin
+                if (data10pos<4) begin
+                    dato[9:0] <= data10[data10pos[1:0]]; 
+                    dvo <= 1;
+                    data10pos <= data10pos + 1;
+                end else begin
+                    state <= ST_EOT;
+                    lvo <= 0;
+                    dvo <= 0;
+                end
              end
           end else if (state == ST_EOT) begin
              // ignore bytes while phy_we high
