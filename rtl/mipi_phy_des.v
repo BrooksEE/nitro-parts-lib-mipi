@@ -10,7 +10,12 @@ module mipi_phy_des (
      output           clk,
      output reg       we,
      output [7:0] data,
-     input            md_polarity
+     input            md_polarity,
+     input  [7:0]   mipi_tx_period
+`ifdef MIPI_RAW_OUTPUT
+     ,
+     output [7:0]     q_out
+`endif
 );
 
 
@@ -65,11 +70,12 @@ module mipi_phy_des (
      // find word alignment by finding row sync pattern
      reg [7:0]  q0, q1;
      reg [7:0]  q_shift[0:7];
+     wire [15:0] shift_data = { q0, q1 } ^ {16{md_polarity}};
      integer i;
      always @(q0, q1) begin
-        q_shift[0] = q0 ^ {8{md_polarity}};
+        q_shift[0] = shift_data[15:8]; 
         for (i=1; i<8; i=i+1) begin
-          q_shift[i] = q_shifter(q0, q1, i) ^ {8{md_polarity}};
+          q_shift[i] = q_shifter(shift_data, i);
         end
      end
 
@@ -88,21 +94,46 @@ module mipi_phy_des (
      reg [7:0] data_i;
 
      assign data = data_i;
-     
+`ifdef MIPI_RAW_OUTPUT
+     assign q_out = q_shift[0];
+`endif
+
+   reg 	       mdp_lp_s, mdn_lp_s;
+   reg [7:0] 	     stall_count;
+   
+   
+   
      always @(posedge clk or negedge resetb) begin
         if (!resetb) begin
             data_i <= 0;
             we <= 0;
             state <= ST_START;
             sync_pos <= 0;
+            mdp_lp_s <= 1;
+            mdn_lp_s <= 1;
+            stall_count <= 0;
+	   
         end else begin
+    	    mdp_lp_s <= mdp_lp;
+	        mdn_lp_s <= mdn_lp;
+	   
             if (state == ST_START) begin
                 we <= 0;
-                if (!mdp_lp && !mdn_lp) begin
-                    state <= ST_SYNC; 
-                end                
+
+                if (!mdp_lp_s || !mdn_lp_s) begin
+		           if(stall_count >= mipi_tx_period) begin
+                     if (!mdp_lp_s && !mdn_lp_s) begin
+                        state <= ST_SYNC;
+                        stall_count <= 0;
+                     end
+    	    	   end else begin
+            	     stall_count <= stall_count + 1;
+                   end
+                end else begin
+		           stall_count <= 0;
+        		end
             end else if (state == ST_SYNC) begin
-                if (mdp_lp || mdn_lp) begin
+                if (mdp_lp_s || mdn_lp_s) begin
                     state <= ST_START;
                 end else begin
                     for (i=0;i<8;i=i+1) begin
@@ -115,7 +146,7 @@ module mipi_phy_des (
                     end
                 end
             end else if (state == ST_SHIFT) begin
-                if (mdp_lp || mdn_lp) begin
+                if (mdp_lp_s || mdn_lp_s) begin
                     state <= ST_START;
                     we <= 0;
                 end else begin
@@ -130,12 +161,11 @@ module mipi_phy_des (
 
 
    function [7:0] q_shifter;
-      input [7:0] qi0;
-      input [7:0] qi1;
+      input [15:0] qi;
       input integer s;
       reg [15:0] word;
       begin
-        word = { qi0, qi1 } << s;
+        word = qi << s;
         q_shifter = word[15:8];
       end
    endfunction

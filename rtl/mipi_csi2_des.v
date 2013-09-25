@@ -16,8 +16,14 @@ module mipi_csi2_des
    output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
-   output  [31:0]  sync_count,
-   input         md_polarity
+   input         md_polarity,
+   input [7:0]   mipi_tx_period
+`ifdef MIPI_RAW_OUTPUT
+   ,
+   input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data 
+   output [7:0]  q,
+   output        qv
+`endif
    );
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
@@ -25,6 +31,16 @@ module mipi_csi2_des
 
    wire phy_we,phy_clk;
    wire [7:0] phy_data;
+
+`ifdef MIPI_RAW_OUTPUT
+   assign qv= qmode == 0 ? !mdp_lp && !mdn_lp :
+              qmode == 1 ? 1 :
+              qmode == 2 ? phy_we :
+              0;
+   wire [7:0] qraw;
+   assign q = qmode == 2 ? phy_data :
+              qraw;
+`endif
 
    mipi_phy_des mipi_phy_des(
       .resetb       (resetb),
@@ -37,7 +53,12 @@ module mipi_csi2_des
       .clk          (phy_clk),
       .we           (phy_we),
       .data         (phy_data),
-      .md_polarity  (md_polarity)
+      .md_polarity  (md_polarity),
+      .mipi_tx_period (mipi_tx_period)
+`ifdef MIPI_RAW_OUTPUT
+      ,
+      .q_out(qraw)
+`endif
    );
 
    assign img_clk = phy_clk;
@@ -68,9 +89,8 @@ module mipi_csi2_des
           data10pos <= 0;
           dvo <= 0;
           data10start <= 0;
+	 
       end else begin
-
-          //img_clk <= !img_clk;
 
           if (state == ST_IDLE) begin
              if (phy_we) begin
