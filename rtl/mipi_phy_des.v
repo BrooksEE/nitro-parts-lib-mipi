@@ -18,6 +18,14 @@ module mipi_phy_des (
 `endif
 );
 
+   reg resetb_s;
+   always @(posedge clk or negedge resetb) begin
+     if (!resetb) begin
+        resetb_s <= 0;
+     end else begin
+        resetb_s <= 1;
+     end
+   end
 
    wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
 
@@ -72,21 +80,21 @@ module mipi_phy_des (
      reg [7:0]  q_shift[0:7];
      wire [15:0] shift_data = { q0, q1 } ^ {16{md_polarity}};
      integer i;
-     always @(q0, q1) begin
-        q_shift[0] = shift_data[15:8]; 
-        for (i=1; i<8; i=i+1) begin
-          q_shift[i] = q_shifter(shift_data, i);
-        end
+     always @(shift_data) begin
+			q_shift[0] = shift_data[15:8]; 
+			for (i=1; i<8; i=i+1) begin
+				q_shift[i] = q_shifter(shift_data, i);
+			end
      end
 
-     always @(posedge clk or negedge resetb) begin
-       if (!resetb) begin
-          q0 <= 0;
-          q1 <= 0;
-       end else begin
-          q0 <= q;
-          q1 <= q0;
-       end
+     always @(posedge clk or negedge resetb_s) begin
+        if (!resetb_s) begin
+           q0 <= 0;
+           q1 <= 0;
+        end else begin
+           q0 <= q;
+           q1 <= q0;
+        end
      end
 
      reg [1:0] state;
@@ -99,12 +107,14 @@ module mipi_phy_des (
 `endif
 
    reg 	       mdp_lp_s, mdn_lp_s;
+	// synthesis attribute IOB of mdp_lp_s is "TRUE";
+	// synthesis attribute IOB of mdn_lp_s is "TRUE";
    reg [7:0] 	     stall_count;
    
    
    
-     always @(posedge clk or negedge resetb) begin
-        if (!resetb) begin
+     always @(posedge clk or negedge resetb_s) begin
+        if (!resetb_s) begin
             data_i <= 0;
             we <= 0;
             state <= ST_START;
