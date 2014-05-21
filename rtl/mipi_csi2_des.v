@@ -12,7 +12,7 @@ module mipi_csi2_des
    input         mdn_lp,
 
    output        img_clk,
-   output 		 [DATA_WIDTH-1:0] dato,
+   output reg [DATA_WIDTH-1:0] dato,
    output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
