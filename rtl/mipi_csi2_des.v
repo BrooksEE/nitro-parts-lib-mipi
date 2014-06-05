@@ -1,5 +1,5 @@
 module mipi_csi2_des 
-  #(DATA_WIDTH=8)
+  #(parameter DATA_WIDTH=8)
   (
    input 	     resetb,
    input         enable,

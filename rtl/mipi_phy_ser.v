@@ -1,5 +1,5 @@
 module mipi_phy_ser 
-    #(NUM_DATA_LANES=1)
+    #(parameter NUM_DATA_LANES=1)
 (
 
        input resetb,
@@ -9,7 +9,7 @@ module mipi_phy_ser
        input clk_hs,
 
        input hs_req,
-       output re,
+       output reg re,
        input [7:0] data,
 
 
@@ -18,8 +18,8 @@ module mipi_phy_ser
        output reg mdp, // output data 
        output reg mdn, 
 
-       output mdp_lp, // low power data output
-       output mdn_lp
+       output reg mdp_lp, // low power data output
+       output reg mdn_lp
 );
 
     wire clk_ser;
@@ -47,6 +47,7 @@ module mipi_phy_ser
            lp_cnt_s <= 0;
            data_sync <= 0;
            timeout <= 0;
+           re <= 0;
         end else begin
            lp_cnt_s <= lp_cnt;
            if (state == ST_STOP) begin

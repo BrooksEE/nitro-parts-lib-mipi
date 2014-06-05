@@ -1,8 +1,9 @@
 
-parameter FIFO_ADDR_WIDTH=5; // determin max depth of FIFO queue
 
 module mipi_csi2_ser
-   #(DATA_WIDTH=8) // width of data bus
+   #(parameter DATA_WIDTH=8,
+     parameter FIFO_ADDR_WIDTH=5 // determin max depth of FIFO queue
+     ) // width of data bus
    (
 
        input resetb,
@@ -227,7 +228,7 @@ module mipi_csi2_ser
             if (phy_re) begin
                 data_ser <= data_id; // todo different data_id when in line data state.
                 image_wc_cnt <= 0;
-                ecc <= 0;
+                ecc_cnt <= 0;
                 substate <= ST_HS_DATA;
             end
           end else if (substate == ST_HS_DATA) begin
@@ -297,7 +298,8 @@ module mipi_csi2_ser
 
                      end
                    end else begin
-                     assert(0); // error case 
+                     //assert(0); // error case 
+                     $display ( "Error Case - mipi cis2 ser" );
                    end
                    
                 end
