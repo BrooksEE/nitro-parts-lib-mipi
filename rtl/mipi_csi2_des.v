@@ -22,14 +22,18 @@ module mipi_csi2_des
    ,
    input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data 
    output [7:0]  q,
-   output        qv
+   output        qv,
+   output        phy_we
 `endif
    );
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    //
 	
-   wire phy_we,phy_clk;
+`ifndef MIPI_RAW_OUTPUT
+   wire phy_we;
+`endif
+   wire phy_clk;
    wire [7:0] phy_data;
 
 `ifdef MIPI_RAW_OUTPUT
