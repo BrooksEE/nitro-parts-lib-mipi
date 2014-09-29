@@ -1,3 +1,7 @@
+
+// TODO fix
+/* verilator lint_off CMPCONST */
+
 module mipi_csi2_des 
   #(parameter DATA_WIDTH=8)
   (
@@ -206,3 +210,5 @@ module mipi_csi2_des
    
    
 endmodule
+
+/* verilator lint_on CMPCONST */
