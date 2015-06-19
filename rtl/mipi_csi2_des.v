@@ -25,32 +25,39 @@ module mipi_csi2_des
 `ifdef MIPI_RAW_OUTPUT
    ,
    input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data 
-   output [7:0]  q,
-   output        qv,
-   output        phy_we
+   output [15:0] raw_mipi_data
 `endif
    );
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    //
 	
-`ifndef MIPI_RAW_OUTPUT
    wire phy_we;
-`endif
    wire phy_clk;
    wire [7:0] phy_data;
 
 `ifdef MIPI_RAW_OUTPUT
-   assign qv= qmode == 0 ? !mdp_lp && !mdn_lp :
-              qmode == 1 ? 1 :
-              qmode == 2 ? phy_we :
-              0;
+   wire [1:0] qstate;
+   wire [2:0] sync_pos;
    wire [7:0] qraw;
-   assign q = qmode == 2 ? phy_data :
-              qraw;
+   reg [5:0]  count0;
+   always @(posedge img_clk) begin
+      count0 <= count0 + 1;
+   end
+   assign raw_mipi_data = (qmode == 0) ? { mdp_lp, mdn_lp, phy_we, sync_pos, qstate, qraw } :
+			  { mdp_lp, mdn_lp, count0, qraw };
+			  
+   
+//   assign qv= qmode == 0 ? !mdp_lp && !mdn_lp :
+//              qmode == 1 ? 1 :
+//              qmode == 2 ? phy_we :
+//              0;
+//   assign q = qmode == 2 ? phy_data :
+//              qraw;
 `endif
 
-   mipi_phy_des mipi_phy_des(
+   mipi_phy_des mipi_phy_des
+     (
       .resetb       (resetb),
       .mcp          (mcp),
       .mcn          (mcn),
@@ -62,11 +69,12 @@ module mipi_csi2_des
       .we           (phy_we),
       .data         (phy_data),
       .md_polarity  (md_polarity),
-      .mipi_tx_period (mipi_tx_period)
 `ifdef MIPI_RAW_OUTPUT
-      ,
-      .q_out(qraw)
+      .q_out(qraw),
+      .state(qstate),
+      .sync_pos(sync_pos),
 `endif
+      .mipi_tx_period (mipi_tx_period)
    );
 
    assign img_clk = phy_clk;

@@ -1,21 +1,22 @@
 
 module mipi_phy_des (
-     input            resetb,
-     input            mcp,   
-     input            mcn,   
-     input            mdp,   
-     input            mdn,   
-     input            mdp_lp,
-     input            mdn_lp,
-     output           clk,
-     output reg       we,
+     input 	  resetb,
+     input 	  mcp, 
+     input 	  mcn, 
+     input 	  mdp, 
+     input 	  mdn, 
+     input 	  mdp_lp,
+     input 	  mdn_lp,
+     output 	  clk,
+     output reg   we,
      output [7:0] data,
-     input            md_polarity,
-     input  [7:0]   mipi_tx_period
+     input 	  md_polarity,
 `ifdef MIPI_RAW_OUTPUT
-     ,
-     output [7:0]     q_out
+     output [7:0] q_out,
+     output [1:0] state,
+     output [2:0] sync_pos,
 `endif
+     input [7:0]  mipi_tx_period
 );
 
    reg resetb_s;
