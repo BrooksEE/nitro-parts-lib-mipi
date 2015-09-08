@@ -70,7 +70,7 @@ module mipi_csi2_ser
    wire [FIFO_ADDR_WIDTH-1:0] image_free;
    wire [FIFO_ADDR_WIDTH-1:0] image_used;
 
-   FIFO #(.ADDR_WIDTH(FIFO_ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)) image_data (
+   fifo_dualclk #(.ADDR_WIDTH(FIFO_ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)) image_data (
        .wclk            (pixclk),
        .rclk            (clk_hs), 
        .we              (href && vsync),
