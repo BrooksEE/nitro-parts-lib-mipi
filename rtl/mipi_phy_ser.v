@@ -24,11 +24,11 @@ module mipi_phy_ser
 
     wire clk_ser;
     PLL_sim pll_ser (
-        clk_hs,
-        clk_ser,
-        8,
-        1,
-        0
+		     .input_clk(clk_hs),
+		     .output_clk(clk_ser),
+		     .pll_mult(8),
+		     .pll_div(1),
+		     .debug(0)
     );
 
     parameter ST_STOP = 0, ST_HS_RQST=1, ST_HS_PRPR=2, ST_SOT=3, ST_HST=4, ST_EOT=5, ST_WAIT=6;
