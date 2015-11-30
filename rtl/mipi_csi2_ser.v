@@ -33,11 +33,10 @@ module mipi_csi2_ser
    // converting to 8 bit data
     wire clk_hs;
    PLL_sim pll_hs (
-		   .input_clk(pixclk),
-		   .output_clk(clk_hs),
-		   .pll_mult({28'b0,pixel_width}), //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits 
-		   .pll_div(8),
-		   .debug(0)
+      .input_clk(pixclk),
+      .output_clk(clk_hs),
+      .pll_mult({28'b0,pixel_width}), //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits 
+      .pll_div(8)
    ); 
    //wire clk_hs = pixclk;
 
