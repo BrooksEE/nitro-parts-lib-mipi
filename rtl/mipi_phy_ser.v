@@ -23,7 +23,9 @@ module mipi_phy_ser
 );
 
     wire clk_ser;
-    PLL_sim pll_ser (
+    PLL_sim 
+       #(.PLL_NAME("phy_8x"))
+    pll_ser (
         clk_hs,
         clk_ser,
         8,
