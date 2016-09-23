@@ -159,7 +159,7 @@ module mipi_csi2_des
                if (wc > 0 && phy_we) begin
                   lvo <= 1;
                   dvo <= 1;
-                  dato[7:0] <= phy_data;
+                  dato <= {phy_data, {DATA_WIDTH-8{1'b0}}};
                   wc <= wc - 1;
                end else begin
                   state <= ST_EOT;
