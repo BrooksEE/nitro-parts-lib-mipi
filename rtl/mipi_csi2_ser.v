@@ -288,7 +288,10 @@ module mipi_csi2_ser
                            lsbs <= lsbs | {6'b0,datar[1:0]} << packing*2;
                            packing <= packing + 1;
                            ser_wc <= ser_wc -1;
-                           data_ser <= datar[9:2];
+                           /* verilator lint_off SELRANGE */
+                           // NOTE it's valid when data width is 10
+                           data_ser <= datar[9:2]; 
+                           /* verilator lint_on SELRANGE */
                            if (packing == 3 || ser_wc == 0) begin
                              image_re <= 0; // don't read a byte this time next time send lsbs
                            end

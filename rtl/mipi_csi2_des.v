@@ -36,24 +36,26 @@ module mipi_csi2_des
    wire phy_clk;
    wire [7:0] phy_data;
 
+   reg [15:0] wc;
+
 `ifdef MIPI_RAW_OUTPUT
    wire [1:0] qstate;
    wire [2:0] sync_pos;
    wire [7:0] qraw;
-   reg [5:0]  count0;
+   reg [7:0]  count0;
    always @(posedge img_clk) begin
-      count0 <= count0 + 1;
+      if (!resetb) begin
+        count0 <= 0;
+      end else begin
+        count0 <= (mdp_lp || mdn_lp) ? 0 : count0 + 1;
+      end
    end
-   assign raw_mipi_data = (qmode == 0) ? { mdp_lp, mdn_lp, phy_we, sync_pos, qstate, qraw } :
-			  { mdp_lp, mdn_lp, count0, qraw };
+   assign raw_mipi_data = (qmode == 0) ? { mdp_lp, mdn_lp, phy_we, sync_pos, qstate, qraw } : // for debugging line state/tx period etc
+			              (qmode == 1) ? { mdp_lp, mdn_lp, 5'b0, phy_we, phy_data} :  // actual data from bus
+                          (qmode == 2) ? { count0, phy_data } : 
+                          (qmode == 3) ? { wc[7:0], phy_data } :
+                          0 ; 
 			  
-   
-//   assign qv= qmode == 0 ? !mdp_lp && !mdn_lp :
-//              qmode == 1 ? 1 :
-//              qmode == 2 ? phy_we :
-//              0;
-//   assign q = qmode == 2 ? phy_data :
-//              qraw;
 `endif
 
    mipi_phy_des mipi_phy_des
@@ -93,7 +95,6 @@ module mipi_csi2_des
 
    reg [1:0] header_cnt; // read the header
    reg [7:0] header[0:3];
-   reg [15:0] wc;
    reg [DATA_WIDTH-1:0] data10[0:3]; 
    reg [2:0] data10pos;
    reg data10start;
@@ -159,7 +160,7 @@ module mipi_csi2_des
                if (wc > 0 && phy_we) begin
                   lvo <= 1;
                   dvo <= 1;
-                  dato <= {phy_data, {DATA_WIDTH-8{1'b0}}};
+                  dato[DATA_WIDTH-1:DATA_WIDTH-8] <= phy_data;
                   wc <= wc - 1;
                end else begin
                   state <= ST_EOT;
