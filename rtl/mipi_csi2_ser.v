@@ -38,7 +38,9 @@ module mipi_csi2_ser
       .input_clk(pixclk),
       .output_clk(clk_hs),
       .pll_mult({28'b0,pixel_width}), //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits 
-      .pll_div(8)
+      .pll_div(8),
+	   .locked(),
+	   .debug(0)
    ); 
    //wire clk_hs = pixclk;
 
