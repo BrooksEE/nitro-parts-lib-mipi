@@ -29,7 +29,61 @@ module mipi_phy_des (
    end
 
    wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
+   parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
+   wire [7:0] q;
 
+`ifdef ARTIX
+   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
+   BUFG ibufg(.I(clk_in_int), .O(clk_in));
+
+   // Set up the clock for use in the serdes
+   BUFR #(.BUFR_DIVIDE("8"))
+   bufr_inst
+     (.O(clk),
+      .I(clk_in_int),
+      .CE(1'b1),
+      .CLR(1'b0)
+      );
+   wire dat;
+   IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat));
+   ISERDESE2
+     #(.DATA_RATE("DDR"),
+       .DATA_WIDTH(8),
+       .INTERFACE_TYPE("NETWORKING"),
+       .NUM_CE(1),
+       .SERDES_MODE("MASTER"),
+       .IOBDELAY("NONE")
+       )
+     serdes
+       (.CLK(clk_in),
+	.CLKB(~clk_in),
+	.CE1(1'b1),
+	.CE2(1'b1),
+	.RST(reset),
+	.CLKDIV(clk),
+	.CLKDIVP(1'b0),
+	.OCLK(1'b0),
+	.OCLKB(1'b0),
+	.BITSLIP(1'b0),
+	.SHIFTIN1(1'b0),
+	.SHIFTIN2(1'b0),
+	.OFB(1'b0),
+	.DYNCLKDIVSEL(1'b0),
+	.DYNCLKSEL(1'b0),
+	.Q1(q[0]),
+	.Q2(q[1]),
+	.Q3(q[2]),
+	.Q4(q[3]),
+	.Q5(q[4]),
+	.Q6(q[5]),
+	.Q7(q[6]),
+	.Q8(q[7]),
+	.D(dat),
+	.DDLY(1'b0)
+	);
+
+
+`else   
    IBUFGDS #(.IOSTANDARD("LVDS_33")) 
    ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
@@ -62,10 +116,6 @@ module mipi_phy_des (
      (.O (clk),
       .I (clk_div));
 
-
-     parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
-
-     wire [7:0] q;
      serdes serdes0
        (.clk_serdes0(clk_in_int_buf),
         .clk_serdes1(clk_in_int_inv),
@@ -75,6 +125,7 @@ module mipi_phy_des (
         .datp(mdp),
         .datn(mdn),
         .q(q));
+`endif
 
      // find word alignment by finding row sync pattern
      reg [7:0]  q0, q1;
@@ -183,6 +234,7 @@ module mipi_phy_des (
 
 endmodule
 
+`ifndef ARTIX
 module serdes
   (
    input 	clk_serdes0,
@@ -197,7 +249,6 @@ module serdes
 
    wire 	dat_s, dat;
    wire [7:0] 	q_int;
-   
    IBUFDS  #(.DIFF_TERM("TRUE"),
 	     .IOSTANDARD("LVDS_33"))
    ibufdat0(.I(datp), .IB(datn), .O(dat));
@@ -265,5 +316,6 @@ module serdes
       );
 
    assign q = q_int;
-
+   
 endmodule
+`endif
