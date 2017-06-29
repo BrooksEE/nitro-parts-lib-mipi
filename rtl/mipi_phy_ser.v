@@ -125,7 +125,7 @@ module mipi_phy_ser
     always @(posedge clk_ser or negedge resetb) begin
         if(!resetb) begin
             mcp <= 0;
-            mcn <= 0;
+            mcn <= 1;
         end else begin
             mcp <= !mcp;
             mcn <= mcp;
@@ -139,7 +139,7 @@ module mipi_phy_ser
     always @(posedge clk_ser or negedge resetb) begin
         if(!resetb) begin
             pos <= 0;
-            mdn <= 0;
+            mdn <= 1;
             mdp <= 0;
             data_shift <= 0;
             state_s <= 0; 

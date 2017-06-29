@@ -37,7 +37,7 @@ module mipi_phy_des (
    BUFG ibufg(.I(clk_in_int), .O(clk_in));
 
    // Set up the clock for use in the serdes
-   BUFR #(.BUFR_DIVIDE("8"))
+   BUFR #(.BUFR_DIVIDE("4"))
    bufr_inst
      (.O(clk),
       .I(clk_in_int),
@@ -59,7 +59,7 @@ module mipi_phy_des (
 	.CLKB(~clk_in),
 	.CE1(1'b1),
 	.CE2(1'b1),
-	.RST(reset),
+	.RST(~resetb_s),
 	.CLKDIV(clk),
 	.CLKDIVP(1'b0),
 	.OCLK(1'b0),
@@ -70,14 +70,14 @@ module mipi_phy_des (
 	.OFB(1'b0),
 	.DYNCLKDIVSEL(1'b0),
 	.DYNCLKSEL(1'b0),
-	.Q1(q[0]),
-	.Q2(q[1]),
-	.Q3(q[2]),
-	.Q4(q[3]),
-	.Q5(q[4]),
-	.Q6(q[5]),
-	.Q7(q[6]),
-	.Q8(q[7]),
+	.Q1(q[7]),
+	.Q2(q[6]),
+	.Q3(q[5]),
+	.Q4(q[4]),
+	.Q5(q[3]),
+	.Q6(q[2]),
+	.Q7(q[1]),
+	.Q8(q[0]),
 	.D(dat),
 	.DDLY(1'b0)
 	);
