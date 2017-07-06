@@ -27,7 +27,8 @@ module mipi_phy_des (
         resetb_s <= 1;
      end
    end
-
+   wire reset = !resetb_s;
+   
    wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
    wire [7:0] q;
@@ -36,11 +37,19 @@ module mipi_phy_des (
    IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
    BUFG ibufg(.I(clk_in_int), .O(clk_in));
 
+   BUFR #(.BUFR_DIVIDE("1"))
+   bufr_inst2
+     (.I(clk_in),
+      .O(clk_in2),
+      .CE(1'b1),
+      .CLR(1'b0)
+      );
+   
    // Set up the clock for use in the serdes
    BUFR #(.BUFR_DIVIDE("8"))
    bufr_inst
      (.O(clk),
-      .I(clk_in_int),
+      .I(clk_in),
       .CE(1'b1),
       .CLR(1'b0)
       );
@@ -55,8 +64,8 @@ module mipi_phy_des (
        .IOBDELAY("NONE")
        )
      serdes
-       (.CLK(clk_in),
-	.CLKB(~clk_in),
+       (.CLK(clk_in2),
+	.CLKB(~clk_in2),
 	.CE1(1'b1),
 	.CE2(1'b1),
 	.RST(reset),
@@ -79,7 +88,11 @@ module mipi_phy_des (
 	.Q7(q[6]),
 	.Q8(q[7]),
 	.D(dat),
-	.DDLY(1'b0)
+	.DDLY(1'b0),
+	.O(),
+	.SHIFTOUT1(),
+	.SHIFTOUT2()
+	
 	);
 
 

@@ -116,6 +116,16 @@ module mipi_csi2_des
           dvo <= 0;
           data10start <= 0;
           state <= ST_IDLE;
+	 header[0] <= 0;
+	 header[1] <= 0;
+	 header[2] <= 0;
+	 header[3] <= 0;
+	 wc <= 0;
+	 data10[0] <= 0;
+	 data10[1] <= 0;
+	 data10[2] <= 0;
+	 data10[3] <= 0;
+ 
 	 
       end else begin
           if (!enable) begin
