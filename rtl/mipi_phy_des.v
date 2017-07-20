@@ -13,8 +13,8 @@ module mipi_phy_des (
      input 	  md_polarity,
 `ifdef MIPI_RAW_OUTPUT
      output [7:0] q_out,
-     output [1:0] state,
-     output [2:0] sync_pos,
+     output reg [1:0] state,
+     output reg [2:0] sync_pos,
 `endif
      input [7:0]  mipi_tx_period
 );
@@ -29,32 +29,86 @@ module mipi_phy_des (
    end
    wire reset = !resetb_s;
    
-   wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
    wire [7:0] q;
 
 `ifdef ARTIX
-   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
-   BUFG ibufg(.I(clk_in_int), .O(clk_in));
+   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in));
 
-   BUFR #(.BUFR_DIVIDE("1"))
-   bufr_inst2
-     (.I(clk_in),
-      .O(clk_in2),
-      .CE(1'b1),
-      .CLR(1'b0)
-      );
-   
-   // Set up the clock for use in the serdes
-   BUFR #(.BUFR_DIVIDE("4"))
-   bufr_inst
-     (.O(clk),
-      .I(clk_in),
-      .CE(1'b1),
-      .CLR(1'b0)
-      );
+   MMCME2_BASE
+     #(
+       .CLKIN1_PERIOD(2.5),
+       .BANDWIDTH("OPTIMIZED"), // Jitter programming (OPTIMIZED, HIGH, LOW)
+       .CLKFBOUT_PHASE(0.0),//Phase offset in deg of CLKFB (-360.000-360.000).
+       .CLKFBOUT_MULT_F(4),
+       .DIVCLK_DIVIDE(1),
+       .CLKOUT0_DIVIDE_F(4),
+       .CLKOUT1_DIVIDE(16),
+       .CLKOUT2_DIVIDE(1),
+       .CLKOUT3_DIVIDE(1),
+       .CLKOUT4_DIVIDE(1),
+       .CLKOUT5_DIVIDE(1),
+       .CLKOUT6_DIVIDE(1),
+       .CLKOUT0_DUTY_CYCLE(0.5),
+       .CLKOUT1_DUTY_CYCLE(0.5),
+       .CLKOUT2_DUTY_CYCLE(0.5),
+       .CLKOUT3_DUTY_CYCLE(0.5),
+       .CLKOUT4_DUTY_CYCLE(0.5),
+       .CLKOUT5_DUTY_CYCLE(0.5),
+       .CLKOUT6_DUTY_CYCLE(0.5),
+       .CLKOUT0_PHASE(0.0),
+       .CLKOUT1_PHASE(0.0),
+       .CLKOUT2_PHASE(0.0),
+       .CLKOUT3_PHASE(0.0),
+       .CLKOUT4_PHASE(0.0),
+       .CLKOUT5_PHASE(0.0),
+       .CLKOUT6_PHASE(0.0),
+       .CLKOUT4_CASCADE("FALSE"),
+       .REF_JITTER1(0.0),
+       .STARTUP_WAIT("FALSE")
+       )
+   u_mmcm_hdmi_clk
+   (
+    .CLKIN1(clk_in),
+    .CLKFBIN(clk_in2),
+    .RST(reset),
+    .PWRDWN(1'b0),
+    .CLKOUT0(clk_in2),
+    .CLKOUT0B(),
+    .CLKOUT1(clk),
+    .CLKOUT1B(),
+    .CLKOUT2 (),
+    .CLKOUT2B(),
+    .CLKOUT3 (),
+    .CLKOUT3B(),
+    .CLKOUT4 (),
+    .CLKOUT5 (),
+    .CLKOUT6 (),
+    .CLKFBOUT(),
+    .CLKFBOUTB(),
+    .LOCKED(clk_locked)
+    );
+
+//   BUFR #(.BUFR_DIVIDE("1"))
+//   bufr_inst2
+//     (.I(clk_in),
+//      .O(clk_in2),
+//      .CE(1'b1),
+//      .CLR(1'b0)
+//      );
+//   
+//   // Set up the clock for use in the serdes
+//   BUFR #(.BUFR_DIVIDE("4"))
+//   bufr_inst
+//     (.O(clk),
+//      .I(clk_in),
+//      .CE(1'b1),
+//      .CLR(1'b0)
+//      );
    wire dat;
    IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat));
+
+
    ISERDESE2
      #(.DATA_RATE("DDR"),
        .DATA_WIDTH(8),
@@ -96,7 +150,8 @@ module mipi_phy_des (
 	);
 
 
-`else   
+`else
+   wire clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    IBUFGDS #(.IOSTANDARD("LVDS_33")) 
    ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
