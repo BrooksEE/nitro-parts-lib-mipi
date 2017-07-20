@@ -12,9 +12,11 @@ module mipi_phy_des (
      output [7:0] data,
      input 	  md_polarity,
 `ifdef MIPI_RAW_OUTPUT
+     input mmcm_reset,		     
      output [7:0] q_out,
-     output reg [1:0] state,
-     output reg [2:0] sync_pos,
+     output [1:0] state,
+     output [2:0] sync_pos,
+     output 	  locked, 
 `endif
      input [7:0]  mipi_tx_period
 );
@@ -33,7 +35,7 @@ module mipi_phy_des (
    wire [7:0] q;
 
 `ifdef ARTIX
-   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in));
+   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
    MMCME2_BASE
      #(
@@ -43,7 +45,7 @@ module mipi_phy_des (
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
        .CLKOUT0_DIVIDE_F(4),
-       .CLKOUT1_DIVIDE(16),
+       .CLKOUT1_DIVIDE(1),
        .CLKOUT2_DIVIDE(1),
        .CLKOUT3_DIVIDE(1),
        .CLKOUT4_DIVIDE(1),
@@ -67,15 +69,15 @@ module mipi_phy_des (
        .REF_JITTER1(0.0),
        .STARTUP_WAIT("FALSE")
        )
-   u_mmcm_hdmi_clk
+   u_mmcm_mipi_clk
    (
-    .CLKIN1(clk_in),
+    .CLKIN1(clk_in_int),
     .CLKFBIN(clk_in2),
-    .RST(reset),
+    .RST(mmcm_reset),
     .PWRDWN(1'b0),
-    .CLKOUT0(clk_in2),
+    .CLKOUT0(clk_in),
     .CLKOUT0B(),
-    .CLKOUT1(clk),
+    .CLKOUT1(),
     .CLKOUT1B(),
     .CLKOUT2 (),
     .CLKOUT2B(),
@@ -86,25 +88,25 @@ module mipi_phy_des (
     .CLKOUT6 (),
     .CLKFBOUT(),
     .CLKFBOUTB(),
-    .LOCKED(clk_locked)
+    .LOCKED(locked)
     );
 
-//   BUFR #(.BUFR_DIVIDE("1"))
-//   bufr_inst2
-//     (.I(clk_in),
-//      .O(clk_in2),
-//      .CE(1'b1),
-//      .CLR(1'b0)
-//      );
-//   
-//   // Set up the clock for use in the serdes
-//   BUFR #(.BUFR_DIVIDE("4"))
-//   bufr_inst
-//     (.O(clk),
-//      .I(clk_in),
-//      .CE(1'b1),
-//      .CLR(1'b0)
-//      );
+   BUFR #(.BUFR_DIVIDE("1"))
+   bufr_inst2
+     (.I(clk_in),
+      .O(clk_in2),
+      .CE(1'b1),
+      .CLR(1'b0)
+      );
+   
+   // Set up the clock for use in the serdes
+   BUFR #(.BUFR_DIVIDE("4"))
+   bufr_inst
+     (.O(clk),
+      .I(clk_in),
+      .CE(1'b1),
+      .CLR(1'b0)
+      );
    wire dat;
    IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat));
 
