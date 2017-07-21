@@ -1,10 +1,10 @@
 
 module mipi_phy_des (
      input 	  resetb,
-     input 	  mcp, 
-     input 	  mcn, 
-     input 	  mdp, 
-     input 	  mdn, 
+     input 	  mcp,
+     input 	  mcn,
+     input 	  mdp,
+     input 	  mdn,
      input 	  mdp_lp,
      input 	  mdn_lp,
      output 	  clk,
@@ -12,11 +12,11 @@ module mipi_phy_des (
      output [7:0] data,
      input 	  md_polarity,
 `ifdef MIPI_RAW_OUTPUT
-     input mmcm_reset,		     
+     input mmcm_reset,
      output [7:0] q_out,
      output [1:0] state,
      output [2:0] sync_pos,
-     output 	  locked, 
+     output 	  locked,
 `endif
      input [7:0]  mipi_tx_period
 );
@@ -30,11 +30,13 @@ module mipi_phy_des (
      end
    end
    wire reset = !resetb_s;
-   
+
    parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
    wire [7:0] q;
 
 `ifdef ARTIX
+`ifndef verilator // TODO Artix unisims
+
    IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
    MMCME2_BASE
@@ -98,7 +100,7 @@ module mipi_phy_des (
       .CE(1'b1),
       .CLR(1'b0)
       );
-   
+
    // Set up the clock for use in the serdes
    BUFR #(.BUFR_DIVIDE("4"))
    bufr_inst
@@ -148,13 +150,14 @@ module mipi_phy_des (
 	.O(),
 	.SHIFTOUT1(),
 	.SHIFTOUT2()
-	
+
 	);
 
+`endif // verilator
 
 `else
    wire clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
-   IBUFGDS #(.IOSTANDARD("LVDS_33")) 
+   IBUFGDS #(.IOSTANDARD("LVDS_33"))
    ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
    // Set up the clock for use in the serdes
@@ -203,7 +206,7 @@ module mipi_phy_des (
      wire [15:0] shift_data = { q0, q1 } ^ {16{md_polarity}};
      integer i;
      always @(shift_data) begin
-			q_shift[0] = shift_data[15:8]; 
+			q_shift[0] = shift_data[15:8];
 			for (i=1; i<8; i=i+1) begin
 				q_shift[i] = q_shifter(shift_data, i);
 			end
@@ -232,9 +235,9 @@ module mipi_phy_des (
 	// synthesis attribute IOB of mdp_lp_s is "TRUE";
 	// synthesis attribute IOB of mdn_lp_s is "TRUE";
    reg [7:0] 	     stall_count;
-   
-   
-   
+
+
+
      always @(posedge clk or negedge resetb_s) begin
         if (!resetb_s) begin
             data_i <= 0;
@@ -244,11 +247,11 @@ module mipi_phy_des (
             mdp_lp_s <= 1;
             mdn_lp_s <= 1;
             stall_count <= 0;
-	   
+
         end else begin
     	    mdp_lp_s <= mdp_lp;
 	        mdn_lp_s <= mdn_lp;
-	   
+
             if (state == ST_START) begin
                 we <= 0;
 
@@ -322,7 +325,7 @@ module serdes
    IBUFDS  #(.DIFF_TERM("TRUE"),
 	     .IOSTANDARD("LVDS_33"))
    ibufdat0(.I(datp), .IB(datn), .O(dat));
-   
+
    ISERDES2 #(
 	      .BITSLIP_ENABLE("FALSE"),
 	      .DATA_RATE("DDR"),
@@ -340,7 +343,7 @@ module serdes
       .RST(reset),
       .IOCE(serdes_strobe), //data strobe signal
       .SHIFTIN(1'b0), // cascade-in signal
-      
+
       .CFB0(),
       .CFB1(),
       .DFB(),
@@ -371,7 +374,7 @@ module serdes
       .RST(reset),
       .IOCE(serdes_strobe), //data strobe signal
       .SHIFTIN(dat_s), // cascade-in signal
-      
+
       .CFB0(),
       .CFB1(),
       .DFB(),
@@ -386,6 +389,6 @@ module serdes
       );
 
    assign q = q_int;
-   
+
 endmodule
 `endif
