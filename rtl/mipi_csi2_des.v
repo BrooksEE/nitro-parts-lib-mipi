@@ -20,12 +20,12 @@ module mipi_csi2_des
    output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
+   output locked,
+   input mmcm_reset,
    input         md_polarity,
    input [7:0]   mipi_tx_period
 `ifdef MIPI_RAW_OUTPUT
    ,
-   output locked,
-   input mmcm_reset,
    input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data 
    output [15:0] raw_mipi_data
 `endif
@@ -73,12 +73,12 @@ module mipi_csi2_des
       .we           (phy_we),
       .data         (phy_data),
       .md_polarity  (md_polarity),
-`ifdef MIPI_RAW_OUTPUT
+      .locked(locked),
       .mmcm_reset(mmcm_reset),
+`ifdef MIPI_RAW_OUTPUT
       .q_out(qraw),
       .state(qstate),
       .sync_pos(sync_pos),
-      .locked(locked),
 `endif
       .mipi_tx_period (mipi_tx_period)
    );

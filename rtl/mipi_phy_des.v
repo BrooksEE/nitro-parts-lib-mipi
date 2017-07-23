@@ -11,12 +11,12 @@ module mipi_phy_des (
      output reg   we,
      output [7:0] data,
      input 	  md_polarity,
+     input mmcm_reset,		     
+     output 	  locked, 
 `ifdef MIPI_RAW_OUTPUT
-     input mmcm_reset,
      output [7:0] q_out,
      output [1:0] state,
      output [2:0] sync_pos,
-     output 	  locked,
 `endif
      input [7:0]  mipi_tx_period
 );
