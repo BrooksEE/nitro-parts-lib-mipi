@@ -2,12 +2,12 @@
 // TODO fix
 /* verilator lint_off CMPCONST */
 
-module mipi_csi2_des 
+module mipi_csi2_des
   #(parameter DATA_WIDTH=8)
   (
    input 	     resetb,
    input         enable,
-   
+
    input 	     mcp,
    input 	     mcn,
    input 	     mdp,
@@ -26,19 +26,20 @@ module mipi_csi2_des
    input [7:0]   mipi_tx_period
 `ifdef MIPI_RAW_OUTPUT
    ,
-   input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data 
+   input  [1:0]  qmode, // 0 for !mdp_lp && !mdp_lp 1 for all output,2 for shifted phy_data
    output [15:0] raw_mipi_data
 `endif
    );
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    //
-	
+
    wire phy_we;
    wire phy_clk;
    wire [7:0] phy_data;
 
    reg [15:0] wc;
+   reg [2:0] state;
 
 `ifdef MIPI_RAW_OUTPUT
    wire [1:0] qstate;
@@ -53,11 +54,11 @@ module mipi_csi2_des
       end
    end
    assign raw_mipi_data = (qmode == 0) ? { mdp_lp, mdn_lp, phy_we, sync_pos, qstate, qraw } : // for debugging line state/tx period etc
-			              (qmode == 1) ? { mdp_lp, mdn_lp, 5'b0, phy_we, phy_data} :  // actual data from bus
-                          (qmode == 2) ? { count0, phy_data } : 
+			              (qmode == 1) ? { mdp_lp, mdn_lp, fvo, lvo, state, phy_we, phy_data} :  // actual data from bus
+                          (qmode == 2) ? { count0, phy_data } :
                           (qmode == 3) ? { wc[7:0], phy_data } :
-                          0 ; 
-			  
+                          0 ;
+
 `endif
 
    mipi_phy_des mipi_phy_des
@@ -93,13 +94,13 @@ module mipi_csi2_des
       end
    end
 
-   localparam ST_IDLE=0, ST_HEADER=1, ST_DATA8=2, ST_DATA10=3, ST_EOT=4; 
+   localparam ST_IDLE=0, ST_HEADER=1, ST_DATA8=2, ST_DATA10=3, ST_EOT=4;
    localparam ID_FRAME_START=0, ID_FRAME_END=1, ID_LINE_START=2, ID_LINE_END=3;
-   reg [2:0] state;
+
 
    reg [1:0] header_cnt; // read the header
    reg [7:0] header[0:3];
-   reg [DATA_WIDTH-1:0] data10[0:3]; 
+   reg [DATA_WIDTH-1:0] data10[0:3];
    reg [2:0] data10pos;
    reg data10start;
    integer i;
@@ -129,12 +130,12 @@ module mipi_csi2_des
 	 data10[1] <= 0;
 	 data10[2] <= 0;
 	 data10[3] <= 0;
- 
-	 
+
+
       end else begin
           if (!enable) begin
             state <= ST_IDLE;
-          end else begin 
+          end else begin
             if (state == ST_IDLE) begin
                if (phy_we) begin
                   header_cnt <= 1;
@@ -153,7 +154,7 @@ module mipi_csi2_des
                      fvo <= 1;
                      state <= ST_EOT;
                   end else if (header[0][5:0] == ID_FRAME_END) begin
-                     fvo <= 0; 
+                     fvo <= 0;
                      state <= ST_EOT;
                   end else if (header[0][5:0] == 6'h2a) begin
                      wc <= { header[2], header[1] };
@@ -212,7 +213,7 @@ module mipi_csi2_des
 
                end else begin
                   if (data10pos<4) begin
-                      dato[9:0] <= data10[data10pos[1:0]]; 
+                      dato[9:0] <= data10[data10pos[1:0]];
                       dvo <= 1;
                       data10pos <= data10pos + 1;
                   end else begin
@@ -221,7 +222,8 @@ module mipi_csi2_des
                       dvo <= 0;
                   end
                end
-            end else if (state == ST_EOT) begin
+            end else /* if (state == ST_EOT) */ begin
+               // or any other state
                // ignore bytes while phy_we high
                if (!phy_we) begin
                   state <= ST_IDLE;
@@ -230,8 +232,8 @@ module mipi_csi2_des
           end
       end
    end
-   
-   
+
+
 endmodule
 
 /* verilator lint_on CMPCONST */
