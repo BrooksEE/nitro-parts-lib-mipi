@@ -47,7 +47,7 @@ module mipi_phy_des (
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
        .CLKOUT0_DIVIDE_F(4),
-       .CLKOUT1_DIVIDE(1),
+       .CLKOUT1_DIVIDE(16),
        .CLKOUT2_DIVIDE(1),
        .CLKOUT3_DIVIDE(1),
        .CLKOUT4_DIVIDE(1),
@@ -77,9 +77,9 @@ module mipi_phy_des (
     .CLKFBIN(clk_in2),
     .RST(mmcm_reset),
     .PWRDWN(1'b0),
-    .CLKOUT0(clk_in),
+    .CLKOUT0(clk_in2),
     .CLKOUT0B(),
-    .CLKOUT1(),
+    .CLKOUT1(clk),
     .CLKOUT1B(),
     .CLKOUT2 (),
     .CLKOUT2B(),
@@ -93,22 +93,22 @@ module mipi_phy_des (
     .LOCKED(locked)
     );
 
-   BUFR #(.BUFR_DIVIDE("1"))
-   bufr_inst2
-     (.I(clk_in),
-      .O(clk_in2),
-      .CE(1'b1),
-      .CLR(1'b0)
-      );
-
-   // Set up the clock for use in the serdes
-   BUFR #(.BUFR_DIVIDE("4"))
-   bufr_inst
-     (.O(clk),
-      .I(clk_in),
-      .CE(1'b1),
-      .CLR(1'b0)
-      );
+//   BUFR #(.BUFR_DIVIDE("1"))
+//   bufr_inst2
+//     (.I(clk_in),
+//      .O(clk_in2),
+//      .CE(1'b1),
+//      .CLR(1'b0)
+//      );
+//
+//   // Set up the clock for use in the serdes
+//   BUFR #(.BUFR_DIVIDE("4"))
+//   bufr_inst
+//     (.O(clk),
+//      .I(clk_in),
+//      .CE(1'b1),
+//      .CLR(1'b0)
+//      );
    wire dat;
    IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat));
 
