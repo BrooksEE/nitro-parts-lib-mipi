@@ -11,8 +11,14 @@ module mipi_phy_des (
      output reg   we,
      output [7:0] data,
      input 	  md_polarity,
-     input mmcm_reset,		     
-     output 	  locked, 
+`ifdef ARTIX
+     input 	  mmcm_reset, 
+     output 	  locked,
+     input 	  psclk,
+     input 	  psen,
+     input 	  psincdec,
+     output 	  psdone, 
+`endif
 `ifdef MIPI_RAW_OUTPUT
      output [7:0] q_out,
      output [1:0] state,
@@ -39,11 +45,19 @@ module mipi_phy_des (
 
    IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
 
-   MMCME2_BASE
+//`ifdef MIPI_MMCM_PHASE
+//   localparam MIPI_MMCM_PHASE= `MIPI_MMCM_PHASE ;
+//`else
+//   localparam MIPI_MMCM_PHASE=90;
+//`endif			      
+   localparam MIPI_MMCM_PHASE=0;
+
+   MMCME2_ADV
      #(
        .CLKIN1_PERIOD(2.5),
+       .CLKFBOUT_USE_FINE_PS("TRUE"),
        .BANDWIDTH("OPTIMIZED"), // Jitter programming (OPTIMIZED, HIGH, LOW)
-       .CLKFBOUT_PHASE(0.0),//Phase offset in deg of CLKFB (-360.000-360.000).
+       .CLKFBOUT_PHASE(MIPI_MMCM_PHASE),//Phase offset in deg of CLKFB (-360.000-360.000).
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
        .CLKOUT0_DIVIDE_F(4),
@@ -90,7 +104,21 @@ module mipi_phy_des (
     .CLKOUT6 (),
     .CLKFBOUT(),
     .CLKFBOUTB(),
-    .LOCKED(locked)
+    .LOCKED(locked),
+    .PSCLK(psclk),
+    .PSEN(psen),
+    .PSDONE(psdone),
+    .PSINCDEC(psincdec),
+    .CLKIN2(1'b0),
+    .CLKINSEL(1'b1),
+    .DADDR(7'b0),
+    .DI(16'b0),
+    .DWE(1'b0),
+    .DCLK(1'b0),
+    .DO(),
+    .DRDY(),
+    .CLKINSTOPPED(),
+    .CLKFBSTOPPED()
     );
 
 //   BUFR #(.BUFR_DIVIDE("1"))

@@ -20,8 +20,14 @@ module mipi_csi2_des
    output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
+`ifdef ARTIX
    output locked,
    input mmcm_reset,
+     input psclk,
+     input psen,
+     input psincdec,
+     output psdone,
+`endif
    input         md_polarity,
    input [7:0]   mipi_tx_period
 `ifdef MIPI_RAW_OUTPUT
@@ -74,8 +80,14 @@ module mipi_csi2_des
       .we           (phy_we),
       .data         (phy_data),
       .md_polarity  (md_polarity),
+`ifdef ARTIX
       .locked(locked),
       .mmcm_reset(mmcm_reset),
+      .psclk(psclk),
+      .psen(psen),
+      .psincdec(psincdec),
+      .psdone(psdone),
+`endif      
 `ifdef MIPI_RAW_OUTPUT
       .q_out(qraw),
       .state(qstate),
@@ -160,7 +172,7 @@ module mipi_csi2_des
                      wc <= { header[2], header[1] };
                      state <= ST_DATA8;
                   end else if (header[0][5:0] == 6'h2b) begin
-                     wc <= { header[2], header[1] };
+                     wc <= 1610;//{ header[2], header[1] };
                      state <= ST_DATA10;
                      data10pos <= 0;
                      data10start <= 1;
