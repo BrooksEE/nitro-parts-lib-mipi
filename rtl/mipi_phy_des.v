@@ -228,7 +228,7 @@ module mipi_phy_des (
 	.Q6(q[2]),
 	.Q7(q[1]),
 	.Q8(q[0]),
-	.D(dat),
+	.D(1'b0),
 	.DDLY(dat),
 	.O(),
 	.SHIFTOUT1(),
