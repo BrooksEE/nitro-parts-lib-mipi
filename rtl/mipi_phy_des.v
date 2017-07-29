@@ -17,7 +17,10 @@ module mipi_phy_des (
      input 	  psclk,
      input 	  psen,
      input 	  psincdec,
-     output 	  psdone, 
+     output 	  psdone,
+     input 	  del_ld,
+     input [4:0]  del_val_dat,
+     input [4:0]  del_val_clk,
 `endif
 `ifdef MIPI_RAW_OUTPUT
      output [7:0] q_out,
@@ -43,8 +46,34 @@ module mipi_phy_des (
 `ifdef ARTIX
 `ifndef verilator // TODO Artix unisims
 
-   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int));
+   IBUFGDS ibufgclk(.I(mcp), .IB(mcn), .O(clk_in_int0));
 
+   wire [4:0] cntval_clk;
+   IDELAYE2
+     #(.IDELAY_TYPE("VAR_LOAD"),
+       .DELAY_SRC("IDATAIN"),
+       .IDELAY_VALUE(0),
+       .HIGH_PERFORMANCE_MODE("TRUE"),
+       .SIGNAL_PATTERN("CLOCK"),
+       .REFCLK_FREQUENCY(200),
+       .CINVCTRL_SEL("FALSE"),
+       .PIPE_SEL("FALSE")
+       )
+     del_clk
+     (.C(psclk),
+      .REGRST(1'b0),
+      .LD(del_ld),
+      .CE(1'b0),
+      .CINVCTRL(1'b0),
+      .CNTVALUEIN(del_val_clk),
+      .IDATAIN(clk_in_int0),
+      .DATAIN(1'b0),
+      .LDPIPEEN(1'b0),
+      .DATAOUT(clk_in_int),
+      .CNTVALUEOUT(cntval_clk)
+      );
+
+   
 //`ifdef MIPI_MMCM_PHASE
 //   localparam MIPI_MMCM_PHASE= `MIPI_MMCM_PHASE ;
 //`else
@@ -138,8 +167,34 @@ module mipi_phy_des (
 //      .CLR(1'b0)
 //      );
    wire dat;
-   IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat));
-
+   IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat0));
+   wire [4:0] cntval;
+   
+   IDELAYE2
+     #(.IDELAY_TYPE("VAR_LOAD"),
+       .DELAY_SRC("IDATAIN"),
+       .IDELAY_VALUE(0),
+       .HIGH_PERFORMANCE_MODE("TRUE"),
+       .SIGNAL_PATTERN("DATA"),
+       .REFCLK_FREQUENCY(200),
+       .CINVCTRL_SEL("FALSE"),
+       .PIPE_SEL("FALSE")
+       )
+     del_dat
+     (.C(psclk),
+      .REGRST(1'b0),
+      .LD(del_ld),
+      .CE(1'b0),
+      .CINVCTRL(1'b0),
+      .CNTVALUEIN(del_val_dat),
+      .IDATAIN(dat0),
+      .DATAIN(1'b0),
+      .LDPIPEEN(1'b0),
+      .DATAOUT(dat),
+      .CNTVALUEOUT(cntval)
+      );
+   
+   
 
    ISERDESE2
      #(.DATA_RATE("DDR"),
@@ -147,7 +202,7 @@ module mipi_phy_des (
        .INTERFACE_TYPE("NETWORKING"),
        .NUM_CE(1),
        .SERDES_MODE("MASTER"),
-       .IOBDELAY("NONE")
+       .IOBDELAY("BOTH")
        )
      serdes
        (.CLK(clk_in2),
@@ -174,7 +229,7 @@ module mipi_phy_des (
 	.Q7(q[1]),
 	.Q8(q[0]),
 	.D(dat),
-	.DDLY(1'b0),
+	.DDLY(dat),
 	.O(),
 	.SHIFTOUT1(),
 	.SHIFTOUT2()

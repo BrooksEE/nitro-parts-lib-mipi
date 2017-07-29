@@ -21,6 +21,9 @@ module mipi_csi2_des
    output reg 	     lvo,
    output reg 	     fvo,
 `ifdef ARTIX
+     input 	  del_ld,
+     input [4:0]  del_val_dat,
+     input [4:0]  del_val_clk,
    output locked,
    input mmcm_reset,
      input psclk,
@@ -87,6 +90,9 @@ module mipi_csi2_des
       .psen(psen),
       .psincdec(psincdec),
       .psdone(psdone),
+      .del_ld(del_ld),
+      .del_val_dat(del_val_dat),
+      .del_val_clk(del_val_clk),
 `endif      
 `ifdef MIPI_RAW_OUTPUT
       .q_out(qraw),
