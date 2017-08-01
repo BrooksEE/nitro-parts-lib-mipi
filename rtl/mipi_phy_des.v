@@ -63,6 +63,7 @@ module mipi_phy_des (
      (.C(psclk),
       .REGRST(1'b0),
       .LD(del_ld),
+      .INC(1'b0),
       .CE(1'b0),
       .CINVCTRL(1'b0),
       .CNTVALUEIN(del_val_clk),
