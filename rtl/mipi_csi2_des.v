@@ -178,7 +178,7 @@ module mipi_csi2_des
                      wc <= { header[2], header[1] };
                      state <= ST_DATA8;
                   end else if (header[0][5:0] == 6'h2b) begin
-                     wc <= 1610;//{ header[2], header[1] };
+                     wc <= { header[2], header[1] };
                      state <= ST_DATA10;
                      data10pos <= 0;
                      data10start <= 1;
