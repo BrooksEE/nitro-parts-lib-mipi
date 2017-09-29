@@ -2,46 +2,47 @@
 
 module mipi_csi2_ser
    #(parameter DATA_WIDTH=8,
+     parameter MAX_LANES=1,
      parameter FIFO_ADDR_WIDTH=5 // determin max depth of FIFO queue
      ) // width of data bus
    (
 
-       input resetb,
-       input enable,
+       input 		      resetb,
+       input 		      enable,
 
-       input pixclk,
-       input [4:0] lp_clk_div, // lp mipi mode can run max 10 mhz
+       input 		      pixclk,
+       input [4:0] 	      lp_clk_div, // lp mipi mode can run max 10 mhz
 
        input [DATA_WIDTH-1:0] data,
-       input [3:0] pixel_width,
-       input [15:0] num_rows,
-       input [15:0] num_cols,
-       input vsync,
-       input href,
-       
-       output mcp, // output clock
-       output mcn, 
-       output mdp, // output data 
-       output mdn, 
+       input [3:0] 	      pixel_width,
+       input [15:0] 	      num_rows,
+       input [15:0] 	      num_cols,
+       input 		      vsync,
+       input 		      href,
+       input [2:0] 	      num_active_lanes,
 
-       output mdp_lp, // low power data output
-       output mdn_lp
+       output 		      mcp, // output clock
+       output 		      mcn,
+       output [MAX_LANES-1:0] mdp, // output data
+       output [MAX_LANES-1:0] mdn,
+       output [MAX_LANES-1:0] mdp_lp, // low power data output
+       output [MAX_LANES-1:0] mdn_lp
    );
 
    // generate a high speed clock w/ pll
    // for reading image data and creating
    // converting to 8 bit data
     wire clk_hs;
-   PLL_sim 
+   PLL_sim
     #(.PLL_NAME("CSI2_hs"))
    pll_hs (
       .input_clk(pixclk),
       .output_clk(clk_hs),
-      .pll_mult({28'b0,pixel_width}), //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits 
+      .pll_mult({28'b0,pixel_width}), //DATA_WIDTH, // TODO the clock can run slower i.e. 10/8 since we pack with no extra bits
       .pll_div(8),
 	   .locked(),
 	   .debug(0)
-   ); 
+   );
    //wire clk_hs = pixclk;
 
    // generate low speed clock with clock divider.
@@ -75,7 +76,7 @@ module mipi_csi2_ser
 
    fifo_dualclk #(.ADDR_WIDTH(FIFO_ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)) image_data (
        .wclk            (pixclk),
-       .rclk            (clk_hs), 
+       .rclk            (clk_hs),
        .we              (href && vsync),
        .re              (image_re),
        .resetb          (resetb),
@@ -87,7 +88,7 @@ module mipi_csi2_ser
        .wFreeSpace      (image_free),
        .rUsedSpace      (image_used)
    );
-   
+
 
 
    // packet states
@@ -111,7 +112,7 @@ module mipi_csi2_ser
         frame_cnt <= 0;
 
       end else begin
-        vsync_last <= vsync; 
+        vsync_last <= vsync;
         href_last <= href;
         if (!vsync_last && vsync) begin
             state <= ST_FRAME_START;
@@ -140,13 +141,13 @@ module mipi_csi2_ser
    localparam ST_HS_SOT=1, ST_HS_DATA=2, ST_HS_EOT=3;
    reg [2:0] state_s;
    reg [2:0] state_saved;
-   reg [2:0] substate; 
+   reg [2:0] substate;
    reg [1:0] image_wc_cnt;
-   reg [15:0] header_wc; 
+   reg [15:0] header_wc;
    reg [15:0] ser_wc;
    wire phy_re;
    reg [7:0] data_ser;
-   reg [7:0] data_ser_next;
+   reg [1:0] dsi;
    reg [7:0] data_id;
    reg hs_req, hs_req_s;
    reg ecc_cnt;
@@ -164,11 +165,11 @@ module mipi_csi2_ser
 
    always @(posedge clk_hs or negedge resetb) begin
        if (!resetb) begin
-          state_s <= ST_IDLE; 
+          state_s <= ST_IDLE;
           state_saved <= ST_IDLE;
           substate <= ST_IDLE;
           data_ser <= 0;
-          data_ser_next <= 0;
+          dsi <= 0;
           hs_req <= 0;
           hs_req_s <= 0;
           ecc_cnt <= 0;
@@ -183,7 +184,7 @@ module mipi_csi2_ser
           packing <= 0;
           image_flush <= 0;
        end else begin
-          state_s <= state; // TODO state can change before we finish tx the last state. 
+          state_s <= state; // TODO state can change before we finish tx the last state.
                             // needs fixed... href<=0 vsync<=0 but vsync<=0
                             // not sent because state skipped.
           hs_req_s <= hs_req;
@@ -192,6 +193,7 @@ module mipi_csi2_ser
             hs_req <= 0;
             if (state_check != ST_IDLE && !phy_re) begin // if phy_re still high he hasn't finished last trans
                 substate <= ST_HS_SOT;
+                dsi <= 0;
                 long_packet <= state_check == ST_LINE_START;
                 if (state_check == ST_LINE_START) begin
                     data_id <= {2'b0, pixel_width == 8 ? 6'h2a : 6'h2b};
@@ -213,7 +215,7 @@ module mipi_csi2_ser
                             ser_wc <= num_cols;
                             header_wc <= num_cols;
                         end else begin
-                            ser_wc <= image_wc_last; 
+                            ser_wc <= image_wc_last;
                             header_wc <= image_wc_last;
                         end
                     end
@@ -226,7 +228,7 @@ module mipi_csi2_ser
                 image_flush <= !image_empty; // ignore data
                 image_re <= 0;
             end
-            
+
           end else if (substate == ST_HS_SOT) begin
             if (phy_re) begin
                 data_ser <= data_id; // todo different data_id when in line data state.
@@ -237,110 +239,114 @@ module mipi_csi2_ser
           end else if (substate == ST_HS_DATA) begin
             // TODO probably better way to handle states
             // but hacking for now
-            if (state_s != ST_IDLE) begin
-                state_saved <= state_s;
-                if (state_s == ST_FRAME_START) begin
-                    // not keeping up with the last frame?
-                    // just bail
-                    substate <= ST_IDLE;
-                end
-            end
-            if (image_wc_cnt < 2) begin
-                image_wc_cnt <= image_wc_cnt + 1;
-                data_ser <= header_wc[7:0];
-                header_wc <= header_wc >> 8;
-                ecc_cnt <= 0;
-                packing <= 0;
-                lsbs <= 0;
-            end else begin
-                if (!ecc_cnt) begin
-                   ecc_cnt <= 1;
-                   data_ser <= ecc; 
-                   if (long_packet) begin
-                      image_re <= 1;
-                      ser_wc <= ser_wc - 1;
-                   end else begin
-                      substate <= ST_IDLE; // no eot on short packets
-                   end
-                end else begin
-
-                   if (pixel_width == 8) begin
-                    if (image_re) begin
-                       data_ser <= datar[7:0];
-                       ser_wc <= ser_wc - 1;
-                       if (ser_wc == 0) begin
-                         image_re <= 0; 
-                       end
-                    end else begin
-                       substate <= ST_HS_EOT;
-                       data_ser <= checksum[7:0];
-                    end
-                   end else if (pixel_width == 10) begin
-                     if (packing == 4) begin
-                        // multiple of 4 bytes
-                        data_ser <= lsbs;
+            if (phy_re) begin
+              if (state_s != ST_IDLE) begin
+                  state_saved <= state_s;
+                  if (state_s == ST_FRAME_START) begin
+                      // not keeping up with the last frame?
+                      // just bail
+                      substate <= ST_IDLE;
+                  end
+              end
+              if (image_wc_cnt < 2) begin
+                  image_wc_cnt <= image_wc_cnt + 1;
+                  data_ser <= header_wc[7:0];
+                  header_wc <= header_wc >> 8;
+                  ecc_cnt <= 0;
+                  packing <= 0;
+                  lsbs <= 0;
+              end else begin
+                  if (!ecc_cnt) begin
+                     ecc_cnt <= 1;
+                     data_ser <= ecc;
+                     if (long_packet) begin
+                        image_re <= 1;
                         ser_wc <= ser_wc - 1;
-                        lsbs <= 0; 
-                        packing <= 0;
-                        if (ser_wc > 0) begin
-                            image_re <= 1;
-                        end 
                      end else begin
-                        if (image_re) begin
-                           lsbs <= lsbs | {6'b0,datar[1:0]} << packing*2;
-                           packing <= packing + 1;
-                           ser_wc <= ser_wc -1;
-                           /* verilator lint_off SELRANGE */
-                           // NOTE it's valid when data width is 10
-                           data_ser <= datar[9:2]; 
-                           /* verilator lint_on SELRANGE */
-                           if (packing == 3 || ser_wc == 0) begin
-                             image_re <= 0; // don't read a byte this time next time send lsbs
-                           end
-                        end else begin
-                            substate <= ST_HS_EOT;
-                            data_ser <= checksum[7:0];
-                        end
-
+                        substate <= ST_IDLE; // no eot on short packets
                      end
-                   end else begin
-                     //assert(0); // error case 
-                     $display ( "Error Case - mipi cis2 ser" );
-                   end
-                   
-                end
+                  end else begin
+
+                     if (pixel_width == 8) begin
+                      if (image_re) begin
+                         data_ser <= datar[7:0];
+                         ser_wc <= ser_wc - 1;
+                         if (ser_wc == 0) begin
+                           image_re <= 0;
+                         end
+                      end else begin
+                         substate <= ST_HS_EOT;
+                         data_ser <= checksum[7:0];
+                      end
+                     end else if (pixel_width == 10) begin
+                       if (packing == 4) begin
+                          // multiple of 4 bytes
+                          data_ser <= lsbs;
+                          ser_wc <= ser_wc - 1;
+                          lsbs <= 0;
+                          packing <= 0;
+                          if (ser_wc > 0) begin
+                              image_re <= 1;
+                          end
+                       end else begin
+                          if (image_re) begin
+                             lsbs <= lsbs | {6'b0,datar[1:0]} << packing*2;
+                             packing <= packing + 1;
+                             ser_wc <= ser_wc -1;
+                             /* verilator lint_off SELRANGE */
+                             // NOTE it's valid when data width is 10
+                             data_ser <= datar[9:2];
+                             /* verilator lint_on SELRANGE */
+                             if (packing == 3 || ser_wc == 0) begin
+                               image_re <= 0; // don't read a byte this time next time send lsbs
+                             end
+                          end else begin
+                              substate <= ST_HS_EOT;
+                              data_ser <= checksum[7:0];
+                          end
+
+                       end
+                     end else begin
+                       //assert(0); // error case
+                       $display ( "Error Case - mipi cis2 ser" );
+                     end
+
+                  end
+              end
             end
           end else if (substate == ST_HS_EOT) begin
-             data_ser <= checksum[15:8]; 
+             data_ser <= checksum[15:8];
              //hs_req <= 0;
              substate <= ST_IDLE;
           end
        end
    end
 
-   //wire hs_req_phy = hs_req || hs_req_s; // hold high for checksum
+   //wire hs_req_phy = hs_req || hs_req_s; // hold high for checksum;
+   wire phy_dv;
 
-   mipi_phy_ser 
+   assign phy_dv = (dsi == MAX_LANES-1);
+
+    mipi_phy_ser
+      #(.MAX_LANES(MAX_LANES))
     mipi_phy_ser (
        .resetb      (resetb),
        .enable      (enable),
-
+       
+       .num_active_lanes(num_active_lanes),
        .hs_req      (hs_req),
        .re          (phy_re),
+       .dv          (phy_dv),
        .data        (data_ser),
        .clk_hs      (clk_hs),
        .clk_ls      (clk_ls),
-
 
        .mcp         (mcp),
        .mcn         (mcn),
        .mdp         (mdp),
        .mdn         (mdn),
-
        .mdp_lp      (mdp_lp),
        .mdn_lp      (mdn_lp)
-
-   );
-
+    );
 
 endmodule

@@ -1,18 +1,20 @@
 
-module mipi_phy_des (
+module mipi_phy_des
+  #(parameter MAX_LANES=1)
+ (
      input 	  resetb,
      input 	  mcp,
      input 	  mcn,
-     input 	  mdp,
-     input 	  mdn,
-     input 	  mdp_lp,
-     input 	  mdn_lp,
+     input [MAX_LANES-1:0] mdp,
+     input [MAX_LANES-1:0] mdn,
+     input [MAX_LANES-1:0] mdp_lp,
+     input [MAX_LANES-1:0] mdn_lp,
      output 	  clk,
      output reg   we,
-     output [7:0] data,
-     input 	  md_polarity,
+     output reg [7:0] data,
+     input [MAX_LANES-1:0]	  md_polarity,
 `ifdef ARTIX
-     input 	  mmcm_reset, 
+     input 	  mmcm_reset,
      output 	  locked,
      input 	  psclk,
      input 	  psen,
@@ -27,6 +29,7 @@ module mipi_phy_des (
      output [1:0] state,
      output [2:0] sync_pos,
 `endif
+     input [2:0]  num_active_lanes,
      input [7:0]  mipi_tx_period
 );
 
@@ -41,7 +44,8 @@ module mipi_phy_des (
    wire reset = !resetb_s;
 
    parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
-   wire [7:0] q;
+   wire [7:0] q[0:MAX_LANES-1];
+   reg clk_en;
 
 `ifdef ARTIX
 `ifndef verilator // TODO Artix unisims
@@ -74,12 +78,12 @@ module mipi_phy_des (
       .CNTVALUEOUT(cntval_clk)
       );
 
-   
+
 //`ifdef MIPI_MMCM_PHASE
 //   localparam MIPI_MMCM_PHASE= `MIPI_MMCM_PHASE ;
 //`else
 //   localparam MIPI_MMCM_PHASE=90;
-//`endif			      
+//`endif
    localparam MIPI_MMCM_PHASE=0;
 
    MMCME2_ADV
@@ -91,8 +95,8 @@ module mipi_phy_des (
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
        .CLKOUT0_DIVIDE_F(4),
-       .CLKOUT1_DIVIDE(16),
-       .CLKOUT2_DIVIDE(1),
+       .CLKOUT1_DIVIDE(16/MAX_LANES),
+       .CLKOUT2_DIVIDE(16),
        .CLKOUT3_DIVIDE(1),
        .CLKOUT4_DIVIDE(1),
        .CLKOUT5_DIVIDE(1),
@@ -151,6 +155,21 @@ module mipi_phy_des (
     .CLKFBSTOPPED()
     );
 
+  reg [1:0] clkcnt;
+  always @(posedge clk or negedge resetb) begin
+    if (~resetb) begin
+      clkcnt <= 0;
+    end else begin
+      if (clkcnt == MAX_LANES-1) begin
+        clk_en <= 1;
+        clkcnt <= 0;
+      end else begin
+        clk_en <= 0;
+        clkcnt <= clkcnt + 1;
+      end
+    end
+  end
+
 //   BUFR #(.BUFR_DIVIDE("1"))
 //   bufr_inst2
 //     (.I(clk_in),
@@ -167,75 +186,85 @@ module mipi_phy_des (
 //      .CE(1'b1),
 //      .CLR(1'b0)
 //      );
-   wire dat;
-   IBUFDS ibufdat0(.I(mdp), .IB(mdn), .O(dat0));
+
+   wire [MAX_LANES-1:0] din;
+   wire [MAX_LANES-1:0] dat;
    wire [4:0] cntval;
-   
-   IDELAYE2
-     #(.IDELAY_TYPE("VAR_LOAD"),
-       .DELAY_SRC("IDATAIN"),
-       .IDELAY_VALUE(0),
-       .HIGH_PERFORMANCE_MODE("TRUE"),
-       .SIGNAL_PATTERN("DATA"),
-       .REFCLK_FREQUENCY(200),
-       .CINVCTRL_SEL("FALSE"),
-       .PIPE_SEL("FALSE")
-       )
-     del_dat
-     (.C(psclk),
-      .REGRST(1'b0),
-      .LD(del_ld),
-      .CE(1'b0),
-      .CINVCTRL(1'b0),
-      .CNTVALUEIN(del_val_dat),
-      .IDATAIN(dat0),
-      .DATAIN(1'b0),
-      .LDPIPEEN(1'b0),
-      .DATAOUT(dat),
-      .CNTVALUEOUT(cntval)
-      );
-   
-   
+   genvar i;
 
-   ISERDESE2
-     #(.DATA_RATE("DDR"),
-       .DATA_WIDTH(8),
-       .INTERFACE_TYPE("NETWORKING"),
-       .NUM_CE(1),
-       .SERDES_MODE("MASTER"),
-       .IOBDELAY("BOTH")
-       )
-     serdes
-       (.CLK(clk_in2),
-	.CLKB(~clk_in2),
-	.CE1(1'b1),
-	.CE2(1'b1),
-	.RST(~resetb_s),
-	.CLKDIV(clk),
-	.CLKDIVP(1'b0),
-	.OCLK(1'b0),
-	.OCLKB(1'b0),
-	.BITSLIP(1'b0),
-	.SHIFTIN1(1'b0),
-	.SHIFTIN2(1'b0),
-	.OFB(1'b0),
-	.DYNCLKDIVSEL(1'b0),
-	.DYNCLKSEL(1'b0),
-	.Q1(q[7]),
-	.Q2(q[6]),
-	.Q3(q[5]),
-	.Q4(q[4]),
-	.Q5(q[3]),
-	.Q6(q[2]),
-	.Q7(q[1]),
-	.Q8(q[0]),
-	.D(1'b0),
-	.DDLY(dat),
-	.O(),
-	.SHIFTOUT1(),
-	.SHIFTOUT2()
+   generate
+   for (i=0; i<MAX_LANES; i=i+1) begin
 
-	);
+     IBUFDS ibufdat0(.I(mdp[i]), .IB(mdn[i]), .O(din[i]));
+
+
+     IDELAYE2
+       #(.IDELAY_TYPE("VAR_LOAD"),
+         .DELAY_SRC("IDATAIN"),
+         .IDELAY_VALUE(0),
+         .HIGH_PERFORMANCE_MODE("TRUE"),
+         .SIGNAL_PATTERN("DATA"),
+         .REFCLK_FREQUENCY(200),
+         .CINVCTRL_SEL("FALSE"),
+         .PIPE_SEL("FALSE")
+         )
+       del_dat
+       (.C(psclk),
+        .REGRST(1'b0),
+        .LD(del_ld),
+        .CE(1'b0),
+        .CINVCTRL(1'b0),
+        .CNTVALUEIN(del_val_dat),
+        .IDATAIN(din[i]),
+        .DATAIN(1'b0),
+        .LDPIPEEN(1'b0),
+        .DATAOUT(dat[i]),
+        .CNTVALUEOUT()//cntval)
+        );
+
+
+
+     ISERDESE2
+       #(.DATA_RATE("DDR"),
+         .DATA_WIDTH(8),
+         .INTERFACE_TYPE("NETWORKING"),
+         .NUM_CE(1),
+         .SERDES_MODE("MASTER"),
+         .IOBDELAY("BOTH")
+         )
+       serdes
+         (.CLK(clk_in2),
+  	.CLKB(~clk_in2),
+  	.CE1(1'b1),
+  	.CE2(1'b1),
+  	.RST(~resetb_s),
+  	.CLKDIV(clk),
+  	.CLKDIVP(1'b0),
+  	.OCLK(1'b0),
+  	.OCLKB(1'b0),
+  	.BITSLIP(1'b0),
+  	.SHIFTIN1(1'b0),
+  	.SHIFTIN2(1'b0),
+  	.OFB(1'b0),
+  	.DYNCLKDIVSEL(1'b0),
+  	.DYNCLKSEL(1'b0),
+  	.Q1(q[i][7]),
+  	.Q2(q[i][6]),
+  	.Q3(q[i][5]),
+  	.Q4(q[i][4]),
+  	.Q5(q[i][3]),
+  	.Q6(q[i][2]),
+  	.Q7(q[i][1]),
+  	.Q8(q[i][0]),
+  	.D(1'b0),
+  	.DDLY(dat[i]),
+  	.O(),
+  	.SHIFTOUT1(),
+  	.SHIFTOUT2()
+
+  	);
+    end
+  endgenerate
 
 `endif // verilator
 
@@ -273,111 +302,147 @@ module mipi_phy_des (
      (.O (clk),
       .I (clk_div));
 
-     serdes serdes0
-       (.clk_serdes0(clk_in_int_buf),
-        .clk_serdes1(clk_in_int_inv),
-        .serdes_strobe(serdes_strobe),
-        .clk_div(clk),
-        .reset(!resetb),
-        .datp(mdp),
-        .datn(mdn),
-        .q(q));
+    genvar k;
+    generate
+      for (k=0;k<MAX_LANES;k=k+1) begin
+        serdes serdes0
+        (.clk_serdes0(clk_in_int_buf),
+          .clk_serdes1(clk_in_int_inv),
+          .serdes_strobe(serdes_strobe),
+          .clk_div(clk),
+          .reset(!resetb),
+          .datp(mdp[k]),
+          .datn(mdn[k]),
+          .q(q[k]));
+      end
+    endgenerate
 `endif
 
-     // find word alignment by finding row sync pattern
-     reg [7:0]  q0, q1;
-     reg [7:0]  q_shift[0:7];
-     wire [15:0] shift_data = { q0, q1 } ^ {16{md_polarity}};
-     integer i;
-     always @(shift_data) begin
-			q_shift[0] = shift_data[15:8];
-			for (i=1; i<8; i=i+1) begin
-				q_shift[i] = q_shifter(shift_data, i);
-			end
-     end
 
-     always @(posedge clk or negedge resetb_s) begin
-        if (!resetb_s) begin
-           q0 <= 0;
-           q1 <= 0;
-        end else begin
-           q0 <= q;
-           q1 <= q0;
-        end
-     end
-
-     reg [1:0] state;
-     reg [2:0] sync_pos;
-     reg [7:0] data_i;
-
-     assign data = data_i;
-`ifdef MIPI_RAW_OUTPUT
-     assign q_out = q_shift[0];
-`endif
-
-   reg 	       mdp_lp_s, mdn_lp_s;
-	// synthesis attribute IOB of mdp_lp_s is "TRUE";
+  // find word alignment by finding row sync pattern
+  reg [7:0]  q0[0:MAX_LANES-1], q1[0:MAX_LANES-1];
+  reg [7:0]  q_shift[0:MAX_LANES-1][0:7];
+  wire [15:0] shift_data[0:MAX_LANES-1];
+  integer l;
+  reg [MAX_LANES-1:0]  mdp_lp_s, mdn_lp_s;
+  // synthesis attribute IOB of mdp_lp_s is "TRUE";
 	// synthesis attribute IOB of mdn_lp_s is "TRUE";
-   reg [7:0] 	     stall_count;
+  reg [7:0] data_i[0:MAX_LANES-1];
+  reg [1:0] state[0:MAX_LANES-1];
+  reg we_i[0:MAX_LANES-1];
 
+  genvar j;
+  generate
+    for (j=0;j<MAX_LANES;j=j+1) begin
 
+      assign shift_data[j] = { q0[j], q1[j] } ^ {16{md_polarity[j]}};
 
-     always @(posedge clk or negedge resetb_s) begin
+      always @(shift_data) begin
+  		  q_shift[j][0] = shift_data[j][15:8];
+  			for (l=1; l<8; l=l+1) begin
+  				q_shift[j][l] = q_shifter(shift_data[j], l);
+  			end
+      end
+
+      always @(posedge clk or negedge resetb_s) begin
         if (!resetb_s) begin
-            data_i <= 0;
-            we <= 0;
-            state <= ST_START;
-            sync_pos <= 0;
-            mdp_lp_s <= 1;
-            mdn_lp_s <= 1;
-            stall_count <= 0;
-
-        end else begin
-    	    mdp_lp_s <= mdp_lp;
-	        mdn_lp_s <= mdn_lp;
-
-            if (state == ST_START) begin
-                we <= 0;
-
-                if (!mdp_lp_s || !mdn_lp_s) begin
-		           if(stall_count >= mipi_tx_period) begin
-                     if (!mdp_lp_s && !mdn_lp_s) begin
-                        state <= ST_SYNC;
-                        stall_count <= 0;
-                     end
-    	    	   end else begin
-            	     stall_count <= stall_count + 1;
-                   end
-                end else begin
-		           stall_count <= 0;
-        		end
-            end else if (state == ST_SYNC) begin
-                if (mdp_lp_s || mdn_lp_s) begin
-                    state <= ST_START;
-                end else begin
-                    for (i=0;i<8;i=i+1) begin
-                        if (q_shift[i] == 8'hb8) begin
-                            /* verilator lint_off WIDTH */
-                            sync_pos <= i;
-                            /* verilator lint_on WIDTH */
-                            state <= ST_SHIFT;
-                        end
-                    end
-                end
-            end else if (state == ST_SHIFT) begin
-                if (mdp_lp_s || mdn_lp_s) begin
-                    state <= ST_START;
-                    we <= 0;
-                end else begin
-                    we <= 1;
-                    data_i <= q_shift[sync_pos];
-                end
-
-            end
-
+          q0[j] <= 0;
+          q1[j] <= 0;
+        end else if (clk_en) begin
+          q0[j] <= q[j];
+          q1[j] <= q0[j];
         end
-     end
+      end
 
+      reg [2:0] sync_pos;
+
+      //assign data[j*8+7:j*8] = data_i[j];
+
+`ifdef MIPI_RAW_OUTPUT
+      assign q_out = q_shift[j][0];
+`endif
+
+      reg [7:0] 	     stall_count;
+
+      always @(posedge clk or negedge resetb_s) begin
+        if (!resetb_s) begin
+          data_i[j] <= 0;
+          we_i[j] <= 0;
+          state[j] <= ST_START;
+          sync_pos <= 0;
+          mdp_lp_s[j] <= 1;
+          mdn_lp_s[j] <= 1;
+          stall_count <= 0;
+        end else if (clk_en) begin
+          mdp_lp_s[j] <= mdp_lp[j];
+          mdn_lp_s[j] <= mdn_lp[j];
+
+          if (state[j] == ST_START) begin
+            we_i[j] <= 0;
+
+            if (!mdp_lp_s[j] || !mdn_lp_s[j]) begin
+              if(stall_count >= mipi_tx_period) begin
+                if (!mdp_lp_s[j] && !mdn_lp_s[j]) begin
+                  state[j] <= ST_SYNC;
+                  stall_count <= 0;
+                end
+              end else begin
+                stall_count <= stall_count + 1;
+              end
+            end else begin
+              stall_count <= 0;
+            end
+          end else if (state[j] == ST_SYNC) begin
+            if (mdp_lp_s[j] || mdn_lp_s[j]) begin
+              state[j] <= ST_START;
+            end else begin
+              for (l=0;l<8;l=l+1) begin
+                //if (q_shift[j][l+sync_pos] == 8'hb8) begin //start looking beginning at last sync_pos
+                if (q_shift[j][l] == 8'hb8) begin //start looking beginning at last sync_pos
+                  /* verilator lint_off WIDTH */
+                  //sync_pos <= l+sync_pos;
+                  sync_pos <= l;
+                  /* verilator lint_on WIDTH */
+                  state[j] <= ST_SHIFT;
+                end
+              end
+            end
+          end else if (state[j] == ST_SHIFT) begin
+            if (mdp_lp_s[j] || mdn_lp_s[j]) begin
+              state[j] <= ST_START;
+              we_i[j] <= 0;
+            end else begin
+              we_i[j] <= 1;
+              data_i[j] <= q_shift[j][sync_pos];
+            end
+          end
+        end
+      end
+
+    end //for generate loop
+  endgenerate
+
+  reg [1:0] dcnt;
+  reg [1:0] dstate0;
+  reg [1:0] dstate1;
+
+  always @(posedge clk or negedge resetb) begin
+    if (~resetb) begin
+      dcnt <= 0;
+      we <= 0;
+    end else begin
+      dstate0 <= state[0];
+      dstate1 <= dstate0;
+      if (state[0] == ST_SHIFT) begin
+        data <= data_i[dcnt];
+        if (dcnt < num_active_lanes-1)
+          dcnt <= dcnt + 1;
+        else
+          dcnt <= 0;
+      end
+      we <= we_i[0];
+    end
+  end
 
    function [7:0] q_shifter;
       input [15:0] qi;

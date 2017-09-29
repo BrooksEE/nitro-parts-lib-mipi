@@ -3,17 +3,17 @@
 /* verilator lint_off CMPCONST */
 
 module mipi_csi2_des
-  #(parameter DATA_WIDTH=8)
+  #(parameter DATA_WIDTH=8, parameter MAX_LANES=1)
   (
    input 	     resetb,
    input         enable,
 
    input 	     mcp,
    input 	     mcn,
-   input 	     mdp,
-   input 	     mdn,
-   input         mdp_lp,
-   input         mdn_lp,
+   input [MAX_LANES-1:0] mdp,
+   input [MAX_LANES-1:0] mdn,
+   input [MAX_LANES-1:0] mdp_lp,
+   input [MAX_LANES-1:0] mdn_lp,
 
    output        img_clk,
    output reg [DATA_WIDTH-1:0] dato,
@@ -31,7 +31,8 @@ module mipi_csi2_des
      input psincdec,
      output psdone,
 `endif
-   input         md_polarity,
+   input [MAX_LANES-1:0]        md_polarity,
+   input [2:0]  num_active_lanes,
    input [7:0]   mipi_tx_period
 `ifdef MIPI_RAW_OUTPUT
    ,
@@ -70,7 +71,9 @@ module mipi_csi2_des
 
 `endif
 
-   mipi_phy_des mipi_phy_des
+   mipi_phy_des
+     #(.MAX_LANES(MAX_LANES))
+   mipi_phy_des
      (
       .resetb       (resetb),
       .mcp          (mcp),
@@ -93,12 +96,13 @@ module mipi_csi2_des
       .del_ld(del_ld),
       .del_val_dat(del_val_dat),
       .del_val_clk(del_val_clk),
-`endif      
+`endif
 `ifdef MIPI_RAW_OUTPUT
       .q_out(qraw),
       .state(qstate),
       .sync_pos(sync_pos),
 `endif
+      .num_active_lanes(num_active_lanes),
       .mipi_tx_period (mipi_tx_period)
    );
 
