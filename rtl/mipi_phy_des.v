@@ -45,7 +45,7 @@ module mipi_phy_des
 
    parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
    wire [7:0] q[0:MAX_LANES-1];
-   reg clk_en;
+   wire clk_div, clk_d1, clk_d2, clk_d3, clk_d4;
 
 `ifdef ARTIX
 `ifndef verilator // TODO Artix unisims
@@ -94,11 +94,11 @@ module mipi_phy_des
        .CLKFBOUT_PHASE(MIPI_MMCM_PHASE),//Phase offset in deg of CLKFB (-360.000-360.000).
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
-       .CLKOUT0_DIVIDE_F(4),
-       .CLKOUT1_DIVIDE(16/MAX_LANES),
-       .CLKOUT2_DIVIDE(16),
-       .CLKOUT3_DIVIDE(1),
-       .CLKOUT4_DIVIDE(1),
+       .CLKOUT0_DIVIDE_F(16.0/3.0),//(16.0/MAX_LANES),
+       .CLKOUT1_DIVIDE(16/4),//(4),
+       .CLKOUT2_DIVIDE(16/1),//(16),
+       .CLKOUT3_DIVIDE(16/2),//(1),
+       .CLKOUT4_DIVIDE(4),//(1),
        .CLKOUT5_DIVIDE(1),
        .CLKOUT6_DIVIDE(1),
        .CLKOUT0_DUTY_CYCLE(0.5),
@@ -125,15 +125,15 @@ module mipi_phy_des
     .CLKFBIN(clk_in2),
     .RST(mmcm_reset),
     .PWRDWN(1'b0),
-    .CLKOUT0(clk_in2),
+    .CLKOUT0(clk_d3),//(clk),
     .CLKOUT0B(),
-    .CLKOUT1(clk),
+    .CLKOUT1(clk_d4),//(clk_in2),
     .CLKOUT1B(),
-    .CLKOUT2 (),
+    .CLKOUT2 (clk_div),
     .CLKOUT2B(),
-    .CLKOUT3 (),
+    .CLKOUT3 (clk_d2),//(),
     .CLKOUT3B(),
-    .CLKOUT4 (),
+    .CLKOUT4 (clk_in2),//(),
     .CLKOUT5 (),
     .CLKOUT6 (),
     .CLKFBOUT(),
@@ -155,20 +155,12 @@ module mipi_phy_des
     .CLKFBSTOPPED()
     );
 
-  reg [1:0] clkcnt;
-  always @(posedge clk or negedge resetb) begin
-    if (~resetb) begin
-      clkcnt <= 0;
-    end else begin
-      if (clkcnt == MAX_LANES-1) begin
-        clk_en <= 1;
-        clkcnt <= 0;
-      end else begin
-        clk_en <= 0;
-        clkcnt <= clkcnt + 1;
-      end
-    end
-  end
+    wire clk_0, clk_1;
+    wire [1:0] phyclk_sel = num_active_lanes-3'd1;
+
+    BUFGMUX phyclk0(.O(clk), .I0(clk_div), .I1(clk_d2), .S(phyclk_sel[0]));
+//    BUFGMUX phyclk1(.O(clk_1), .I0(clk_d3), .I1(clk_d4), .S(phyclk_sel[0]));
+//    BUFGMUX phyclk(.O(clk), .I0(clk_0), .I1(clk_1), .S(phyclk_sel[1]));
 
 //   BUFR #(.BUFR_DIVIDE("1"))
 //   bufr_inst2
@@ -238,7 +230,7 @@ module mipi_phy_des
   	.CE1(1'b1),
   	.CE2(1'b1),
   	.RST(~resetb_s),
-  	.CLKDIV(clk),
+  	.CLKDIV(clk_div),
   	.CLKDIVP(1'b0),
   	.OCLK(1'b0),
   	.OCLKB(1'b0),
@@ -324,7 +316,8 @@ module mipi_phy_des
   reg [7:0]  q_shift[0:MAX_LANES-1][0:7];
   wire [15:0] shift_data[0:MAX_LANES-1];
   integer l;
-  reg [MAX_LANES-1:0]  mdp_lp_s, mdn_lp_s;
+  //reg [MAX_LANES-1:0]  mdp_lp_s, mdn_lp_s;
+  reg [3:0]  mdp_lp_s[MAX_LANES-1:0], mdn_lp_s[MAX_LANES-1:0];
   // synthesis attribute IOB of mdp_lp_s is "TRUE";
 	// synthesis attribute IOB of mdn_lp_s is "TRUE";
   reg [7:0] data_i[0:MAX_LANES-1];
@@ -344,11 +337,11 @@ module mipi_phy_des
   			end
       end
 
-      always @(posedge clk or negedge resetb_s) begin
+      always @(posedge clk_div or negedge resetb_s) begin
         if (!resetb_s) begin
           q0[j] <= 0;
           q1[j] <= 0;
-        end else if (clk_en) begin
+        end else begin
           q0[j] <= q[j];
           q1[j] <= q0[j];
         end
@@ -356,33 +349,31 @@ module mipi_phy_des
 
       reg [2:0] sync_pos;
 
-      //assign data[j*8+7:j*8] = data_i[j];
-
 `ifdef MIPI_RAW_OUTPUT
       assign q_out = q_shift[j][0];
 `endif
 
       reg [7:0] 	     stall_count;
 
-      always @(posedge clk or negedge resetb_s) begin
+      always @(posedge clk_div or negedge resetb_s) begin
         if (!resetb_s) begin
           data_i[j] <= 0;
           we_i[j] <= 0;
           state[j] <= ST_START;
           sync_pos <= 0;
-          mdp_lp_s[j] <= 1;
-          mdn_lp_s[j] <= 1;
+          mdp_lp_s[j] <= 4'b1111;
+          mdn_lp_s[j] <= 4'b1111;
           stall_count <= 0;
-        end else if (clk_en) begin
-          mdp_lp_s[j] <= mdp_lp[j];
-          mdn_lp_s[j] <= mdn_lp[j];
+        end else begin
+          mdp_lp_s[j] <= {mdp_lp_s[j][2:0], mdp_lp[j]};
+          mdn_lp_s[j] <= {mdn_lp_s[j][2:0], mdn_lp[j]};
 
           if (state[j] == ST_START) begin
             we_i[j] <= 0;
 
-            if (!mdp_lp_s[j] || !mdn_lp_s[j]) begin
+            if (!mdp_lp_s[j][num_active_lanes-1] || !mdn_lp_s[j][num_active_lanes-1]) begin
               if(stall_count >= mipi_tx_period) begin
-                if (!mdp_lp_s[j] && !mdn_lp_s[j]) begin
+                if (!mdp_lp_s[j][num_active_lanes-1] && !mdn_lp_s[j][num_active_lanes-1]) begin
                   state[j] <= ST_SYNC;
                   stall_count <= 0;
                 end
@@ -393,14 +384,12 @@ module mipi_phy_des
               stall_count <= 0;
             end
           end else if (state[j] == ST_SYNC) begin
-            if (mdp_lp_s[j] || mdn_lp_s[j]) begin
+            if (mdp_lp_s[j][num_active_lanes-1] || mdn_lp_s[j][num_active_lanes-1]) begin
               state[j] <= ST_START;
             end else begin
               for (l=0;l<8;l=l+1) begin
-                //if (q_shift[j][l+sync_pos] == 8'hb8) begin //start looking beginning at last sync_pos
                 if (q_shift[j][l] == 8'hb8) begin //start looking beginning at last sync_pos
                   /* verilator lint_off WIDTH */
-                  //sync_pos <= l+sync_pos;
                   sync_pos <= l;
                   /* verilator lint_on WIDTH */
                   state[j] <= ST_SHIFT;
@@ -408,7 +397,7 @@ module mipi_phy_des
               end
             end
           end else if (state[j] == ST_SHIFT) begin
-            if (mdp_lp_s[j] || mdn_lp_s[j]) begin
+            if (mdp_lp_s[j][num_active_lanes-1] || mdn_lp_s[j][num_active_lanes-1]) begin
               state[j] <= ST_START;
               we_i[j] <= 0;
             end else begin
