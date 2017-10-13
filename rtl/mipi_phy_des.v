@@ -12,6 +12,7 @@ module mipi_phy_des
      output 	  clk,
      output reg   we,
      output reg [7:0] data,
+     output reg dvo,
      input [MAX_LANES-1:0]	  md_polarity,
 `ifdef ARTIX
      input 	  mmcm_reset,
@@ -94,11 +95,11 @@ module mipi_phy_des
        .CLKFBOUT_PHASE(MIPI_MMCM_PHASE),//Phase offset in deg of CLKFB (-360.000-360.000).
        .CLKFBOUT_MULT_F(4),
        .DIVCLK_DIVIDE(1),
-       .CLKOUT0_DIVIDE_F(16.0/3.0),//(16.0/MAX_LANES),
-       .CLKOUT1_DIVIDE(16/4),//(4),
-       .CLKOUT2_DIVIDE(16/1),//(16),
-       .CLKOUT3_DIVIDE(16/2),//(1),
-       .CLKOUT4_DIVIDE(4),//(1),
+       .CLKOUT0_DIVIDE_F(16.0/MAX_LANES),
+       .CLKOUT1_DIVIDE(4),
+       .CLKOUT2_DIVIDE(16),
+       .CLKOUT3_DIVIDE(1),
+       .CLKOUT4_DIVIDE(1),
        .CLKOUT5_DIVIDE(1),
        .CLKOUT6_DIVIDE(1),
        .CLKOUT0_DUTY_CYCLE(0.5),
@@ -125,15 +126,15 @@ module mipi_phy_des
     .CLKFBIN(clk_in2),
     .RST(mmcm_reset),
     .PWRDWN(1'b0),
-    .CLKOUT0(clk_d3),//(clk),
+    .CLKOUT0(clk),
     .CLKOUT0B(),
-    .CLKOUT1(clk_d4),//(clk_in2),
+    .CLKOUT1(clk_in2),
     .CLKOUT1B(),
     .CLKOUT2 (clk_div),
     .CLKOUT2B(),
-    .CLKOUT3 (clk_d2),//(),
+    .CLKOUT3 (),
     .CLKOUT3B(),
-    .CLKOUT4 (clk_in2),//(),
+    .CLKOUT4 (),
     .CLKOUT5 (),
     .CLKOUT6 (),
     .CLKFBOUT(),
@@ -154,13 +155,6 @@ module mipi_phy_des
     .CLKINSTOPPED(),
     .CLKFBSTOPPED()
     );
-
-    wire clk_0, clk_1;
-    wire [1:0] phyclk_sel = num_active_lanes-3'd1;
-
-    BUFGMUX phyclk0(.O(clk), .I0(clk_div), .I1(clk_d2), .S(phyclk_sel[0]));
-//    BUFGMUX phyclk1(.O(clk_1), .I0(clk_d3), .I1(clk_d4), .S(phyclk_sel[0]));
-//    BUFGMUX phyclk(.O(clk), .I0(clk_0), .I1(clk_1), .S(phyclk_sel[1]));
 
 //   BUFR #(.BUFR_DIVIDE("1"))
 //   bufr_inst2
@@ -316,7 +310,6 @@ module mipi_phy_des
   reg [7:0]  q_shift[0:MAX_LANES-1][0:7];
   wire [15:0] shift_data[0:MAX_LANES-1];
   integer l;
-  //reg [MAX_LANES-1:0]  mdp_lp_s, mdn_lp_s;
   reg [3:0]  mdp_lp_s[MAX_LANES-1:0], mdn_lp_s[MAX_LANES-1:0];
   // synthesis attribute IOB of mdp_lp_s is "TRUE";
 	// synthesis attribute IOB of mdn_lp_s is "TRUE";
@@ -411,7 +404,7 @@ module mipi_phy_des
     end //for generate loop
   endgenerate
 
-  reg [1:0] dcnt;
+  reg [1:0] dcnt, lcnt;
   reg [1:0] dstate0;
   reg [1:0] dstate1;
 
@@ -419,6 +412,7 @@ module mipi_phy_des
     if (~resetb) begin
       dcnt <= 0;
       we <= 0;
+      dvo <= 0;
     end else begin
       dstate0 <= state[0];
       dstate1 <= dstate0;
@@ -428,6 +422,21 @@ module mipi_phy_des
           dcnt <= dcnt + 1;
         else
           dcnt <= 0;
+
+        if (lcnt < MAX_LANES-1) begin
+          lcnt <= lcnt + 1;
+        end else begin
+          lcnt <= 0;
+        end
+        if (lcnt < num_active_lanes)
+          dvo <= we_i[0];
+        else
+          dvo <= 0;
+
+      end else begin
+        lcnt <= 0;
+        dcnt <= 0;
+        we <= 0;
       end
       we <= we_i[0];
     end
