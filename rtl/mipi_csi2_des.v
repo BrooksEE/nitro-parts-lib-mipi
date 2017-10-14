@@ -17,7 +17,7 @@ module mipi_csi2_des
 
    output        img_clk,
    output reg [DATA_WIDTH-1:0] dato,
-   output         dvo,
+   output reg        dvo,
    output reg 	     lvo,
    output reg 	     fvo,
 `ifdef ARTIX
@@ -43,6 +43,11 @@ module mipi_csi2_des
 
    //wire clk_in_int, clk_div, clk_in_int_buf, clk_in_int_inv, serdes_strobe;
    //
+   reg [DATA_WIDTH-1:0] dato0;
+   wire                 dvo0;
+   reg                  lvo0;
+   reg                  fvo0;
+   
 
    wire phy_we;
    wire phy_clk;
@@ -66,7 +71,7 @@ module mipi_csi2_des
       end
    end
    assign raw_mipi_data = (qmode == 0) ? { mdp_lp, mdn_lp, phy_we, sync_pos, qstate, qraw } : // for debugging line state/tx period etc
-			              (qmode == 1) ? { mdp_lp, mdn_lp, fvo, lvo, state, phy_we, phy_data} :  // actual data from bus
+			              (qmode == 1) ? { mdp_lp, mdn_lp, fvo0, lvo0, state, phy_we, phy_data} :  // actual data from bus
                           (qmode == 2) ? { count0, phy_data } :
                           (qmode == 3) ? { wc[7:0], phy_data } :
                           0 ;
@@ -140,6 +145,10 @@ module mipi_csi2_des
       if (!resetb_s) begin
           lvo <= 0;
           fvo <= 0;
+          lvo0 <= 0;
+          fvo0 <= 0;
+          dvo <= 0;
+          dato0 <= 0;
           dato <= 0;
           header_cnt <= 0;
           data10pos <= 0;
@@ -157,7 +166,12 @@ module mipi_csi2_des
 	 data10[3] <= 0;
 
 
-      end else begin
+      end else begin // if (!resetb_s)
+         fvo <= fvo0;
+         lvo <= lvo0;
+         dvo <= dvo0;
+         dato <= dato0;
+         
           if (!enable) begin
             state <= ST_IDLE;
           end else begin
@@ -177,10 +191,10 @@ module mipi_csi2_des
                if (header_cnt == 3) begin
                   // collect the header
                   if (header[0][5:0] == ID_FRAME_START) begin
-                     fvo <= 1;
+                     fvo0 <= 1;
                      state <= ST_EOT;
                   end else if (header[0][5:0] == ID_FRAME_END) begin
-                     fvo <= 0;
+                     fvo0 <= 0;
                      state <= ST_EOT;
                   end else if (header[0][5:0] == 6'h2a) begin
                      wc <= { header[2], header[1] };
@@ -200,20 +214,20 @@ module mipi_csi2_des
             end else if (state == ST_DATA8) begin
               if (phy_dvo) begin
                if (wc > 0) begin
-                  lvo <= 1;
+                  lvo0 <= 1;
                   dout_en <= 1;
-                  dato[DATA_WIDTH-1:DATA_WIDTH-8] <= phy_data;
+                  dato0[DATA_WIDTH-1:DATA_WIDTH-8] <= phy_data;
                   wc <= wc - 1;
                end else begin
                   state <= ST_EOT;
-                  lvo <= 0;
+                  lvo0 <= 0;
                   // TODO a frame will also have two bytes for the checksum
                end
               end
             end else if (state == ST_DATA10) begin
               if (phy_dvo) begin
                if (wc > 0) begin
-                  lvo <= 1;
+                  lvo0 <= 1;
                   if (wc>0) wc <= wc - 1;
                   // data not valid until we've collected the 5th byte with the
                   // lsbs
@@ -236,17 +250,17 @@ module mipi_csi2_des
                           end
                       end else begin
                           dout_en <= 1;
-                          dato[9:0] <= data10[data10pos[1:0]];
+                          dato0[9:0] <= data10[data10pos[1:0]];
                       end
                   end
                end else begin
                   if (data10pos<4) begin
-                      dato[9:0] <= data10[data10pos[1:0]];
+                      dato0[9:0] <= data10[data10pos[1:0]];
                       dout_en <= 1;
                       data10pos <= data10pos + 1;
                   end else begin
                       state <= ST_EOT;
-                      lvo <= 0;
+                      lvo0 <= 0;
                       dout_en <= 0;
                   end
                end
@@ -262,7 +276,7 @@ module mipi_csi2_des
       end
    end
 
-   assign dvo = dout_en & phy_dvo;
+   assign dvo0 = dout_en & phy_dvo;
 
 
 endmodule
