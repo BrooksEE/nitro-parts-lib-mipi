@@ -18,9 +18,6 @@ module mipi_phy_des
      input 	  mmcm_reset,
      output 	  locked,
      input 	  psclk,
-     input 	  psen,
-     input 	  psincdec,
-     output 	  psdone,
      input 	  del_ld,
      input [4:0]  del_val_dat,
      input [4:0]  del_val_clk,
@@ -44,7 +41,7 @@ module mipi_phy_des
    end
    wire reset = !resetb_s;
 
-   parameter ST_START=0, ST_SYNC=1, ST_SHIFT=2;
+   localparam ST_START=0, ST_SYNC=1, ST_SHIFT=2;
    wire [7:0] q[0:MAX_LANES-1];
    wire clk_div, clk_d1, clk_d2, clk_d3, clk_d4;
 
@@ -140,16 +137,17 @@ module mipi_phy_des
     .CLKFBOUT(),
     .CLKFBOUTB(),
     .LOCKED(locked),
-    .PSCLK(psclk),
-    .PSEN(psen),
-    .PSDONE(psdone),
-    .PSINCDEC(psincdec),
+    .PSCLK(1'b0),
+    .PSEN(1'b0),
+    .PSDONE(),
+    .PSINCDEC(1'b0),
     .CLKIN2(1'b0),
     .CLKINSEL(1'b1),
     .DADDR(7'b0),
     .DI(16'b0),
     .DWE(1'b0),
     .DCLK(1'b0),
+    .DEN(1'b0),
     .DO(),
     .DRDY(),
     .CLKINSTOPPED(),
@@ -205,6 +203,7 @@ module mipi_phy_des
         .DATAIN(1'b0),
         .LDPIPEEN(1'b0),
         .DATAOUT(dat[i]),
+        .INC(1'b0),
         .CNTVALUEOUT()//cntval)
         );
 
@@ -323,7 +322,7 @@ module mipi_phy_des
 
       assign shift_data[j] = { q0[j], q1[j] } ^ {16{md_polarity[j]}};
 
-      always @(shift_data) begin
+      always @(shift_data[j]) begin
   		  q_shift[j][0] = shift_data[j][15:8];
   			for (l=1; l<8; l=l+1) begin
   				q_shift[j][l] = q_shifter(shift_data[j], l);
@@ -413,6 +412,9 @@ module mipi_phy_des
       dcnt <= 0;
       we <= 0;
       dvo <= 0;
+      data<=0;
+      dcnt <= 0;
+      lcnt <= 0;
     end else begin
       dstate0 <= state[0];
       dstate1 <= dstate0;
